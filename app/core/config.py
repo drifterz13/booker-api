@@ -74,10 +74,3 @@ class IntegrationTestConfig(Settings):
                 "Integration tests require the PostgreSQL booker-test database"
             )
         return value
-
-
-class Config(StorageConfig, DatabaseConfig):
-    chroma_api_key: str
-    chroma_tenant: str
-    chroma_database: str
-    openai_api_key: str

@@ -8,7 +8,6 @@ __pycache__
 *.py[cod]
 .pytest_cache
 .ruff_cache
-.chainlit
 .files
 .store
 docs
@@ -16,4 +15,3 @@ tests
 build
 dist
 *.egg-info
-chainlit.md

@@ -1,4 +1,4 @@
-.PHONY: dev chainlit test format migrate migration db-check
+.PHONY: dev test format migrate migration db-check
 
 dev:
 	uv run fastapi dev
@@ -15,9 +15,6 @@ migration:
 
 format:
 	uv run ruff format app
-
-chainlit:
-	uv run chainlit run app/chainlit_app.py
 
 test:
 	uv run python -m unittest discover -s tests -v

@@ -1,19 +1,20 @@
 # Booker
 
 Booker ingests PDF books, extracts bookmarked sections, and indexes their text
-for search. It provides a FastAPI API for managing books and a Chainlit UI for
-asking questions about them. PDFs need bookmarks and extractable text.
+for search. It provides a FastAPI API for uploads, book management, ingestion,
+and streaming book chat. PDFs need bookmarks and extractable text.
 
 ## Stack
 
 - Python, FastAPI, SQLModel, and Alembic
-- PyMuPDF, LangChain, and OpenAI
-- PostgreSQL with pgvector, RustFS for PDF storage, and Chroma for Chainlit search
-- Chainlit, uv, and Ruff
+- Pydantic AI for chat; OpenAI for models and embeddings
+- PyMuPDF and LangChain text splitting
+- PostgreSQL with pgvector and RustFS for PDF storage
+- uv and Ruff
 
 ## Installation
 
-Install Python 3.11.4, uv, and Docker with Compose, then run:
+Install Python 3.12, uv, and Docker with Compose, then run:
 
 ```sh
 uv sync --locked
@@ -42,10 +43,21 @@ make dev
 
 Open http://localhost:8000/docs to use the API.
 
-To start the chat UI:
+The Docker image starts the same FastAPI application on port 8000.
+
+## Chat
+
+After uploading and ingesting a book, connect React's Vercel AI SDK `useChat`
+transport to `POST /books/{book_id}/chat`. The book must have a ready active index.
 
 ```sh
-make chainlit
+curl -N http://localhost:8000/books/BOOK_ID/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"messages":[{"id":"user-1","role":"user","parts":[{"type":"text","text":"What is this book about?"}]}]}'
 ```
 
-Open the URL printed by Chainlit and upload a PDF.
+The endpoint streams text, `search_book` tool calls/results, and transient
+`data-status` progress events. Handle progress through `useChat`'s `onData`
+callback. Send the client conversation history on every request; the backend
+does not persist conversations. Model calls go directly to OpenAI without a
+gateway. Configure `CHAT_MODEL_NAME` and `CHAT_TIMEOUT_SECONDS` in `.env`.
