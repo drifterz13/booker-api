@@ -13,6 +13,7 @@ from .core.config import DatabaseConfig, EmbeddingConfig, IngestionConfig, Stora
 from .db.database import create_db_engine
 from .models.book_index import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL
 from .routers.books import router as books_router
+from .routers.uploads import router as uploads_router
 from .services.storage.storage import ObjectStorage
 
 
@@ -67,6 +68,7 @@ def create_app(
 
     app = FastAPI(lifespan=lifespan)
     app.include_router(books_router)
+    app.include_router(uploads_router)
 
     @app.get("/health")
     def check_health() -> str:

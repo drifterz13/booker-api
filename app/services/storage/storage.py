@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +36,47 @@ class ObjectStorage:
 
     def close(self) -> None:
         self._client.close()
+
+    def start_multipart(self, *, object_key: str) -> str:
+        response = self._client.create_multipart_upload(
+            Bucket=self._bucket_name, Key=object_key, ContentType="application/pdf"
+        )
+        return response["UploadId"]
+
+    def presign_part(self, *, object_key: str, upload_id: str, part_number: int) -> str:
+        """Allow a client to PUT one part directly to storage for 15 minutes."""
+        return self._client.generate_presigned_url(
+            "upload_part",
+            Params={
+                "Bucket": self._bucket_name,
+                "Key": object_key,
+                "UploadId": upload_id,
+                "PartNumber": part_number,
+            },
+            ExpiresIn=900,
+            HttpMethod="PUT",
+        )
+
+    def complete_multipart(
+        self, *, object_key: str, upload_id: str, parts: Sequence[tuple[int, str]]
+    ) -> str:
+        response = self._client.complete_multipart_upload(
+            Bucket=self._bucket_name,
+            Key=object_key,
+            UploadId=upload_id,
+            MultipartUpload={
+                "Parts": [
+                    {"PartNumber": number, "ETag": etag}
+                    for number, etag in sorted(parts)
+                ]
+            },
+        )
+        return response["ETag"]
+
+    def abort_multipart(self, *, object_key: str, upload_id: str) -> None:
+        self._client.abort_multipart_upload(
+            Bucket=self._bucket_name, Key=object_key, UploadId=upload_id
+        )
 
     def upload(self, source: BinaryIO, *, object_key: str) -> None:
         """Upload from the stream's current position to a caller-owned key.
