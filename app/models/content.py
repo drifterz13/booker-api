@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
-from .book import Position
-
+from .pdf import PdfPosition
 
 PAGE_SEPARATOR = "\n\n"
 
@@ -30,8 +29,8 @@ class ContentSegment:
     title: str
     level: int
     path: tuple[str, ...]
-    start: Position
-    end: Position
+    start: PdfPosition
+    end: PdfPosition
     fragments: tuple[PageFragment, ...]
 
     @property

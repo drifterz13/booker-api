@@ -1,32 +1,76 @@
-import os
+from typing import Literal
+
+from pydantic import Field, SecretStr, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 
-class Config:
-    def __init__(self) -> None:
-        chroma_api_key = os.getenv("CHROMA_API_KEY")
-        if not chroma_api_key:
-            raise ValueError("Missing required environment variable: 'CHROMA_API_KEY'")
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
+    )
 
-        chroma_tenant = os.getenv("CHROMA_TENANT")
-        if not chroma_tenant:
-            raise ValueError("Missing required environment variable: 'CHROMA_TENANT'")
 
-        chroma_database = os.getenv("CHROMA_DATABASE")
-        if not chroma_database:
-            raise ValueError("Missing required environment variable: 'CHROMA_DATABASE'")
+class StorageConfig(Settings):
+    aws_access_key_id: str = Field(
+        validation_alias="RUSTFS_ACCESS_KEY", default="rustfs"
+    )
+    aws_secret_key: str = Field(validation_alias="RUSTFS_SECRET_KEY", default="secret")
+    s3_endpoint_url: str = "http://localhost:9000"
+    s3_region_name: str = "eu-central-1"
+    s3_bucket_name: str = "booker-prod"
 
-        self._chroma_api_key = chroma_api_key
-        self._chroma_tenant = chroma_tenant
-        self._chroma_database = chroma_database
 
-    @property
-    def chroma_api_key(self) -> str:
-        return self._chroma_api_key
+class DatabaseConfig(Settings):
+    database_url: str = "postgresql+psycopg://admin:mysecret@localhost:5432/booker"
 
-    @property
-    def chroma_tenant(self) -> str:
-        return self._chroma_tenant
 
-    @property
-    def chroma_database(self) -> str:
-        return self._chroma_database
+class CorsConfig(Settings):
+    cors_allowed_origins: list[str] = Field(default_factory=lambda: ["*"], min_length=1)
+
+
+class EmbeddingConfig(Settings):
+    openai_api_key: SecretStr
+
+
+class ChatConfig(EmbeddingConfig):
+    chat_model_name: str = Field(default="gpt-4o-mini", pattern=r"^[\w.-]+$")
+    chat_timeout_seconds: float = Field(default=120, gt=0)
+
+    @field_validator("openai_api_key")
+    @classmethod
+    def validate_api_key(cls, value: SecretStr) -> SecretStr:
+        key = value.get_secret_value().strip()
+        if not key:
+            raise ValueError("An OpenAI API key is required for chat")
+        return SecretStr(key)
+
+
+class IngestionConfig(Settings):
+    ingestion_workers: int = Field(default=1, ge=1)
+
+
+class IntegrationTestConfig(Settings):
+    test_database_url: str = (
+        "postgresql+psycopg://admin:mysecret@localhost:5432/booker-test"
+    )
+    test_s3_bucket_name: Literal["booker-test"] = "booker-test"
+
+    @field_validator("test_database_url")
+    @classmethod
+    def validate_test_database(cls, value: str) -> str:
+        try:
+            url = make_url(value)
+        except ArgumentError as error:
+            raise ValueError(
+                "A valid PostgreSQL test database URL is required"
+            ) from error
+        if (
+            url.get_backend_name() not in {"postgres", "postgresql"}
+            or url.database != "booker-test"
+        ):
+            raise ValueError(
+                "Integration tests require the PostgreSQL booker-test database"
+            )
+        return value

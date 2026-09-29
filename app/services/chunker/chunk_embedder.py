@@ -26,3 +26,17 @@ class ChunkEmbedder:
                 for chunk, vector in zip(batch, vectors, strict=True)
             )
         return results
+
+    async def aembed(self, chunks: list[Chunk]) -> list[EmbeddedChunk]:
+        """Embed chunks in sequential batches using the provider's async client."""
+        results: list[EmbeddedChunk] = []
+        for start in range(0, len(chunks), self._batch_size):
+            batch = chunks[start : start + self._batch_size]
+            vectors = await self._embeddings.aembed_documents(
+                [chunk.embedding_text for chunk in batch]
+            )
+            results.extend(
+                EmbeddedChunk(chunk, vector)
+                for chunk, vector in zip(batch, vectors, strict=True)
+            )
+        return results
