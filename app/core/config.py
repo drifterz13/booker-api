@@ -1,19 +1,58 @@
-from pydantic import Field
+from typing import Literal
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 
-class Config(BaseSettings):
+class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
     )
 
+
+class StorageConfig(Settings):
+    aws_access_key_id: str = Field(
+        validation_alias="RUSTFS_ACCESS_KEY", default="rustfs"
+    )
+    aws_secret_key: str = Field(validation_alias="RUSTFS_SECRET_KEY", default="secret")
+    s3_endpoint_url: str = "http://localhost:9000"
+    s3_region_name: str = "eu-central-1"
+    s3_bucket_name: str = "booker-prod"
+
+
+class DatabaseConfig(Settings):
+    database_url: str = "postgresql+psycopg://admin:mysecret@localhost:5432/booker"
+
+
+class IntegrationTestConfig(Settings):
+    test_database_url: str = (
+        "postgresql+psycopg://admin:mysecret@localhost:5432/booker-test"
+    )
+    test_s3_bucket_name: Literal["booker-test"] = "booker-test"
+
+    @field_validator("test_database_url")
+    @classmethod
+    def validate_test_database(cls, value: str) -> str:
+        try:
+            url = make_url(value)
+        except ArgumentError as error:
+            raise ValueError(
+                "A valid PostgreSQL test database URL is required"
+            ) from error
+        if (
+            url.get_backend_name() not in {"postgres", "postgresql"}
+            or url.database != "booker-test"
+        ):
+            raise ValueError(
+                "Integration tests require the PostgreSQL booker-test database"
+            )
+        return value
+
+
+class Config(StorageConfig, DatabaseConfig):
     chroma_api_key: str
     chroma_tenant: str
     chroma_database: str
-
-    database_url: str = "postgresql://postgres:admin@mysecret:5432/booker"
-
-    openai_api_key: str = Field()
-
-    rustfs_access_key: str = "rustfs"
-    rustfs_secret_key: str = "secret"
+    openai_api_key: str
