@@ -29,7 +29,7 @@ docker compose up -d db rustfs
 ```
 
 Open the RustFS console at http://localhost:9001, sign in with the
-`RUSTFS_ACCESS_KEY` and `RUSTFS_SECRET_KEY` from `.env`, and create the
+`S3_ACCESS_KEY` and `S3_SECRET_KEY` from `.env`, and create the
 `booker-prod` bucket.
 
 ## Run
