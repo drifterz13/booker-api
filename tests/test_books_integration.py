@@ -1,11 +1,13 @@
 import asyncio
 import hashlib
 import json
+import struct
 import unittest
 from datetime import timedelta
 from tempfile import TemporaryFile
 from uuid import UUID, uuid4
 
+import httpx
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 from sqlmodel import Session, select
@@ -58,6 +60,10 @@ class BooksIntegrationTests(unittest.TestCase):
             for book in session.exec(
                 select(Book).where(Book.filename.startswith(self.prefix))
             ).all():
+                self.s3.delete_object(
+                    Bucket=self.storage.s3_bucket_name,
+                    Key=f"thumbnails/{book.id}.png",
+                )
                 book.active_index_id = None
                 session.add(book)
                 session.flush()
@@ -93,6 +99,7 @@ class BooksIntegrationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 202, response.text)
         public = response.json()
         self.assertIsNone(public["active_index_id"])
+        self.assertIsNone(public["thumbnail_url"])
         self.assertEqual(public["ingestion"]["status"], "building")
         # TestClient waits for background tasks, although the HTTP response is sent first.
         detail = self.client.get(f"/books/{public['id']}").json()
@@ -102,6 +109,7 @@ class BooksIntegrationTests(unittest.TestCase):
         self.assertEqual(book.object_key, key)
         self.assertEqual(book.checksum, hashlib.sha256(self.pdf).hexdigest())
         self.assertEqual(book.created_at.utcoffset(), timedelta(0))
+        self.assert_thumbnail(public["id"])
         with Session(self.app.state.engine) as session:
             index = session.get(BookIndex, book.active_index_id)
             self.assertEqual(index.chunk_count, 1)
@@ -197,6 +205,9 @@ class BooksIntegrationTests(unittest.TestCase):
         response = self.client.get("/books", params={"offset": 1, "limit": 2})
         self.assertEqual(response.status_code, 200)
         self.assertEqual([book["id"] for book in response.json()], expected_ids)
+        for book in response.json():
+            if book["filename"].startswith(self.prefix):
+                self.assertIsNotNone(book["thumbnail_url"])
 
     def test_invalid_requests_and_missing_objects_do_not_create_books(self):
         key = f"books/{uuid4()}.pdf"
@@ -256,6 +267,22 @@ class BooksIntegrationTests(unittest.TestCase):
             response = self.create()
         self.assertEqual(response.status_code, 202, response.text)
         self.assert_failed_ingestion(response)
+        self.assert_thumbnail(response.json()["id"])
+
+    def assert_thumbnail(self, book_id):
+        detail = self.client.get(f"/books/{book_id}").json()
+        self.assertIsNotNone(detail["thumbnail_url"])
+        with Session(self.app.state.engine) as session:
+            book = session.get(Book, UUID(book_id))
+            self.assertEqual(book.thumbnail_key, f"thumbnails/{book_id}.png")
+        with httpx.Client(timeout=10, trust_env=False) as client:
+            response = client.get(detail["thumbnail_url"])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "image/png")
+        self.assertTrue(response.content.startswith(b"\x89PNG\r\n\x1a\n"))
+        width, height = struct.unpack(">II", response.content[16:24])
+        self.assertLessEqual(max(width, height), 240)
+        self.assertGreater(min(width, height), 0)
 
     def assert_failed_ingestion(self, response):
         public = response.json()

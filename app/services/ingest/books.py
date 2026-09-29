@@ -2,6 +2,7 @@ import asyncio
 import logging
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import UUID
@@ -19,6 +20,7 @@ from ..books import BookService, BookTooLargeError
 from ..chunker import ChunkEmbedder
 from ..process_pool import run_in_process_pool
 from ..storage.storage import ObjectStorage
+from ..thumbnail import render_thumbnail
 from .pipeline import PIPELINE_VERSION, chunk_book, extract_book, verify_pdf
 
 logger = logging.getLogger(__name__)
@@ -105,6 +107,7 @@ class BookIngestionService:
                 checksum = await run_in_process_pool(
                     self._process_pool, verify_pdf, source
                 )
+                await self._create_thumbnail(index.book_id, source)
                 segments = await run_in_process_pool(
                     self._process_pool, extract_book, source
                 )
@@ -124,6 +127,30 @@ class BookIngestionService:
                 book_id=index.book_id, index_id=index.id
             ) from error
         return index.id
+
+    async def _create_thumbnail(self, book_id: UUID, source: Path) -> None:
+        try:
+            content = await run_in_process_pool(
+                self._process_pool, render_thumbnail, source
+            )
+            key = f"thumbnails/{book_id}.png"
+            await run_in_threadpool(
+                self._storage.upload,
+                BytesIO(content),
+                object_key=key,
+                content_type="image/png",
+            )
+            await run_in_threadpool(self._save_thumbnail_key, book_id, key)
+        except Exception:
+            logger.exception("Could not create thumbnail for book %s", book_id)
+
+    def _save_thumbnail_key(self, book_id: UUID, key: str) -> None:
+        with Session(self._engine) as session, session.begin():
+            book = session.get(Book, book_id, with_for_update=True)
+            if book is None:
+                raise ValueError("Book does not exist")
+            book.thumbnail_key = key
+            session.add(book)
 
     def _create_index(self, book_id: UUID) -> PendingIndex:
         with Session(self._engine) as session:

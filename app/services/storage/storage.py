@@ -19,7 +19,7 @@ class StoredObject:
 
 
 class ObjectStorage:
-    """Synchronous access to PDF objects in an existing S3-compatible bucket."""
+    """Synchronous access to books and images in an existing S3-compatible bucket."""
 
     def __init__(self, *, config: StorageConfig) -> None:
         self._client = boto3.client(
@@ -79,7 +79,13 @@ class ObjectStorage:
             Bucket=self._bucket_name, Key=object_key, UploadId=upload_id
         )
 
-    def upload(self, source: BinaryIO, *, object_key: str) -> None:
+    def upload(
+        self,
+        source: BinaryIO,
+        *,
+        object_key: str,
+        content_type: str = "application/pdf",
+    ) -> None:
         """Upload from the stream's current position to a caller-owned key.
 
         Use a unique key such as ``books/<book_id>.pdf`` for each book. The
@@ -90,7 +96,16 @@ class ObjectStorage:
             source,
             self._bucket_name,
             object_key,
-            ExtraArgs={"ContentType": "application/pdf"},
+            ExtraArgs={"ContentType": content_type},
+        )
+
+    def presign_download(self, *, object_key: str) -> str:
+        """Allow a client to download an object for 15 minutes."""
+        return self._client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self._bucket_name, "Key": object_key},
+            ExpiresIn=900,
+            HttpMethod="GET",
         )
 
     def download(self, *, object_key: str, destination: Path) -> None:

@@ -31,5 +31,6 @@ class Book(SQLModel, table=True):
         default=None, max_length=64, description="SHA-256, populated during ingestion"
     )
     active_index_id: UUID | None = Field(default=None)
+    thumbnail_key: str | None = Field(default=None)
     status: BookStatus = Field(default=BookStatus.UPLOADED)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

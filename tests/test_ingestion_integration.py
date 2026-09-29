@@ -36,6 +36,10 @@ class IngestionIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     def cleanup_book(self, book_id, object_key):
         self.s3.delete_object(Bucket=self.storage_config.s3_bucket_name, Key=object_key)
+        self.s3.delete_object(
+            Bucket=self.storage_config.s3_bucket_name,
+            Key=f"thumbnails/{book_id}.png",
+        )
         with Session(self.engine) as session:
             book = session.get(Book, book_id)
             if book is not None:

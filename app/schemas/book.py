@@ -25,6 +25,7 @@ class BookPublic(BaseModel):
     status: BookStatus
     created_at: datetime
     active_index_id: UUID | None = None
+    thumbnail_url: str | None = None
 
 
 class BookListParams(BaseModel):
