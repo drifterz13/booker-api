@@ -2,21 +2,19 @@ import multiprocessing
 import unittest
 from concurrent.futures import ProcessPoolExecutor
 from io import BytesIO
-from unittest.mock import Mock
 from uuid import uuid4
 
 import pymupdf
-from langchain_core.embeddings import Embeddings
 from sqlalchemy import delete
 from sqlmodel import Session, select
 
 from app.db.vector_store.pgvector import PgVectorStore
 from app.models import Book, BookChunk, BookIndex
-from app.models.book_index import EMBEDDING_DIMENSIONS, BookIndexStatus
+from app.models.book_index import BookIndexStatus
 from app.services.chunker import ChunkEmbedder
 from app.services.ingest.books import BookIngestionError, BookIngestionService
 from app.services.storage.storage import ObjectStorage
-from tests.support import database_resources, storage_resources
+from tests.support import create_test_embeddings, database_resources, storage_resources
 
 
 class IngestionIntegrationTests(unittest.IsolatedAsyncioTestCase):
@@ -72,15 +70,11 @@ class IngestionIntegrationTests(unittest.IsolatedAsyncioTestCase):
             session.add(book)
             session.commit()
 
-        embeddings = Mock(spec=Embeddings)
-        embeddings.aembed_documents.return_value = [
-            [1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1)
-        ]
         service = BookIngestionService(
             engine=self.engine,
             storage=self.storage,
             process_pool=self.pool,
-            embedder=ChunkEmbedder(embeddings),
+            embedder=ChunkEmbedder(create_test_embeddings()),
         )
         index_id = await service.ingest(book_id)
         with Session(self.engine) as session:

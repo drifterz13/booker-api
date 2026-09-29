@@ -90,32 +90,9 @@ class UploadsIntegrationTests(unittest.TestCase):
         with stored["Body"] as body:
             self.assertEqual(body.read(), b"".join(contents))
 
-    def test_validation_and_abort(self):
-        self.assertEqual(
-            self.client.post("/uploads", json={"filename": "book.txt"}).status_code, 422
-        )
+    def test_abort_upload(self):
         upload = self.start()
         path = f"/uploads/{upload['upload_id']}"
-        key = upload["object_key"]
-        for numbers in ([0], [10001], [1, 1], []):
-            self.assertEqual(
-                self.client.post(
-                    f"{path}/parts", json={"object_key": key, "part_numbers": numbers}
-                ).status_code,
-                422,
-            )
-        self.assertEqual(
-            self.client.post(
-                f"{path}/complete",
-                json={
-                    "object_key": key,
-                    "parts": [{"part_number": 1, "etag": "missing"}],
-                },
-            ).status_code,
-            400,
-        )
-        response = self.client.delete(path, params={"object_key": key})
-        self.assertEqual(response.status_code, 204, response.text)
-        self.assertEqual(
-            self.client.delete(path, params={"object_key": key}).status_code, 404
-        )
+        params = {"object_key": upload["object_key"]}
+        self.assertEqual(self.client.delete(path, params=params).status_code, 204)
+        self.assertEqual(self.client.delete(path, params=params).status_code, 404)

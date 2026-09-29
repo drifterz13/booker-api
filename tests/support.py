@@ -3,7 +3,6 @@
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from unittest.mock import Mock
 
 import boto3
 import pymupdf
@@ -84,10 +83,15 @@ def create_test_pdf(*, bookmarks: bool = True) -> bytes:
         return document.tobytes()
 
 
+class FixedEmbeddings(Embeddings):
+    """Deterministic vectors; no network calls or mock call bookkeeping."""
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed_query(text) for text in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return [1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1)
+
+
 def create_test_embeddings() -> Embeddings:
-    """Mock the provider boundary while keeping ingestion and storage real."""
-    embeddings = Mock(spec=Embeddings)
-    embeddings.aembed_documents.side_effect = lambda texts: [
-        [1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1) for _ in texts
-    ]
-    return embeddings
+    return FixedEmbeddings()
