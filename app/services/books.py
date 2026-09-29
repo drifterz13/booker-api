@@ -1,9 +1,7 @@
-import hashlib
 from pathlib import Path
 from typing import BinaryIO
 from uuid import UUID, uuid4
 
-import pymupdf
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, select
 
@@ -60,14 +58,14 @@ class BookService:
         self._session = session
         self._storage = storage
 
-    def create(self, *, filename: str, source: BinaryIO) -> Book:
-        """Validate, hash, and upload a PDF, recording its upload lifecycle.
+    def create(self, *, filename: str, source: BinaryIO, checksum: str) -> Book:
+        """Persist an already validated PDF and record its upload lifecycle.
 
         A storage failure leaves a failed row. If persistence fails after upload,
         the object may exist with an uploading row; the error carries its ID/key.
         No database transaction is held open during the storage upload.
         """
-        checksum = self._validate_upload(filename=filename, source=source)
+        validate_book_filename(filename)
         book_id = uuid4()
         object_key = f"books/{book_id}.pdf"
         book = Book(
@@ -123,25 +121,3 @@ class BookService:
             .limit(limit)
         )
         return list(self._session.exec(statement).all())
-
-    def _validate_upload(self, *, filename: str, source: BinaryIO) -> str:
-        validate_book_filename(filename)
-
-        source.seek(0)
-        content = source.read(self.MAX_UPLOAD_BYTES + 1)
-        if not content:
-            raise BookValidationError("The PDF is empty")
-        if len(content) > self.MAX_UPLOAD_BYTES:
-            raise BookTooLargeError(
-                f"The PDF exceeds the {self.MAX_UPLOAD_BYTES}-byte upload limit"
-            )
-
-        try:
-            with pymupdf.open(stream=content, filetype="pdf") as document:
-                if not document.is_pdf or document.page_count == 0:
-                    raise BookValidationError("The upload must be a PDF with pages")
-        except pymupdf.FileDataError as error:
-            raise BookValidationError("The upload is not a readable PDF") from error
-
-        source.seek(0)
-        return hashlib.sha256(content).hexdigest()

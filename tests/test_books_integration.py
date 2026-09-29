@@ -2,21 +2,29 @@ import hashlib
 import unittest
 from datetime import timedelta
 from tempfile import TemporaryFile
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import delete, text
 from sqlmodel import Session, select
 
+from app.db.vector_store.pgvector import PgVectorStore
 from app.main import create_app
+from app.models import BookChunk, BookIndex
 from app.models.book import Book, BookStatus
+from app.models.book_index import BookIndexStatus
 from app.services.books import BookService
-from tests.support import create_test_pdf, database_resources, storage_resources
+from tests.support import (
+    create_test_embeddings,
+    create_test_pdf,
+    database_resources,
+    storage_resources,
+)
 
 
 class BooksIntegrationTests(unittest.TestCase):
-    """Real API, PostgreSQL, and RustFS; no mocks or SQLite replacements."""
+    """Real API, PostgreSQL, RustFS, and PDF processing; mocked embeddings."""
 
     @classmethod
     def setUpClass(cls):
@@ -25,8 +33,11 @@ class BooksIntegrationTests(unittest.TestCase):
 
     def setUp(self):
         self.prefix = f"integration-{uuid4().hex}-"
+        self.embeddings = create_test_embeddings()
         self.app = create_app(
-            database_config=self.database, storage_config=self.storage
+            database_config=self.database,
+            storage_config=self.storage,
+            embeddings=self.embeddings,
         )
         self.client = self.enterContext(TestClient(self.app))
         # Registered after the client so cleanup runs before its engine closes.
@@ -50,6 +61,10 @@ class BooksIntegrationTests(unittest.TestCase):
                 self.s3.delete_object(
                     Bucket=self.storage.s3_bucket_name, Key=book.object_key
                 )
+                book.active_index_id = None
+                session.add(book)
+                session.flush()
+                session.exec(delete(BookIndex).where(BookIndex.book_id == book.id))
                 session.delete(book)
             session.commit()
         if self.books():
@@ -110,7 +125,9 @@ class BooksIntegrationTests(unittest.TestCase):
         response = self.upload(suffix="Book.PDF")
         self.assertEqual(response.status_code, 201, response.text)
         public = response.json()
-        self.assertEqual(set(public), {"id", "filename", "status", "created_at"})
+        self.assertEqual(
+            set(public), {"id", "filename", "status", "created_at", "active_index_id"}
+        )
         self.assertEqual(public["status"], "uploaded")
         book = self.books()[0]
         self.assertEqual(str(book.id), public["id"])
@@ -118,6 +135,19 @@ class BooksIntegrationTests(unittest.TestCase):
         self.assertEqual(book.status, BookStatus.UPLOADED)
         self.assertEqual(book.created_at.utcoffset(), timedelta(0))
         self.assertEqual(book.object_key, f"books/{book.id}.pdf")
+        self.assertEqual(str(book.active_index_id), public["active_index_id"])
+        with Session(self.app.state.engine) as session:
+            index = session.get(BookIndex, book.active_index_id)
+            self.assertEqual(index.status, BookIndexStatus.READY)
+            self.assertEqual(index.chunk_count, 1)
+            chunk = session.exec(
+                select(BookChunk).where(BookChunk.index_id == index.id)
+            ).one()
+            hits = PgVectorStore(session).search(
+                list(chunk.embedding), index_id=index.id
+            )
+            self.assertIn("Book upload integration test", hits[0].text)
+            self.assertEqual(hits[0].pages, (0,))
         stored = self.s3.get_object(
             Bucket=self.storage.s3_bucket_name, Key=book.object_key
         )
@@ -153,7 +183,9 @@ class BooksIntegrationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([book["id"] for book in response.json()], expected_ids)
         for book in response.json():
-            self.assertEqual(set(book), {"id", "filename", "status", "created_at"})
+            self.assertEqual(
+                set(book), {"id", "filename", "status", "created_at", "active_index_id"}
+            )
 
     def test_invalid_request_fields_are_rejected_without_writes(self):
         before = self.object_keys()
@@ -191,7 +223,11 @@ class BooksIntegrationTests(unittest.TestCase):
         missing = self.storage.model_copy(
             update={"s3_bucket_name": f"booker-test-missing-{uuid4().hex}"}
         )
-        failed_app = create_app(database_config=self.database, storage_config=missing)
+        failed_app = create_app(
+            database_config=self.database,
+            storage_config=missing,
+            embeddings=self.embeddings,
+        )
         with TestClient(failed_app) as client:
             response = self.upload(client=client)
         self.assertEqual(response.status_code, 502, response.text)
@@ -201,6 +237,38 @@ class BooksIntegrationTests(unittest.TestCase):
         self.assertNotIn(book.object_key, self.object_keys())
         listing = self.client.get("/books", params={"limit": 100}).json()
         self.assertIn(str(book.id), [item["id"] for item in listing])
+
+    def test_pdf_without_bookmarks_preserves_upload_and_failed_index(self):
+        response = self.upload(content=create_test_pdf(bookmarks=False))
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assert_failed_ingestion(response)
+        self.embeddings.aembed_documents.assert_not_awaited()
+
+    def test_embedding_failure_preserves_upload_and_failed_index(self):
+        self.embeddings.aembed_documents.side_effect = RuntimeError(
+            "Provider unavailable"
+        )
+        response = self.upload()
+        self.assertEqual(response.status_code, 502, response.text)
+        self.assert_failed_ingestion(response)
+
+    def assert_failed_ingestion(self, response):
+        detail = response.json()["detail"]
+        book = self.books()[0]
+        self.assertEqual(detail["book_id"], str(book.id))
+        self.assertEqual(book.status, BookStatus.UPLOADED)
+        self.assertIsNone(book.active_index_id)
+        self.assertIn(book.object_key, self.object_keys())
+        with Session(self.app.state.engine) as session:
+            index = session.get(BookIndex, UUID(detail["index_id"]))
+            self.assertEqual(index.book_id, book.id)
+            self.assertEqual(index.status, BookIndexStatus.FAILED)
+            self.assertEqual(
+                session.exec(
+                    select(BookChunk).where(BookChunk.index_id == index.id)
+                ).all(),
+                [],
+            )
 
 
 if __name__ == "__main__":

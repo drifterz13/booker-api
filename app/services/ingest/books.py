@@ -1,10 +1,8 @@
 import asyncio
-from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TypeVar
 from uuid import UUID
 
 from fastapi.concurrency import run_in_threadpool
@@ -17,11 +15,9 @@ from ...models import Book, BookIndex, EmbeddedChunk
 from ...models.book import BookStatus
 from ...models.book_index import BookIndexStatus
 from ..chunker import ChunkEmbedder
+from ..process_pool import run_in_process_pool
 from ..storage.storage import ObjectStorage
 from .pipeline import PIPELINE_VERSION, chunk_book, extract_book
-
-Input = TypeVar("Input")
-Output = TypeVar("Output")
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,8 +68,12 @@ class BookIngestionService:
                     object_key=index.object_key,
                     destination=source,
                 )
-                segments = await self._run_in_process_pool(extract_book, source)
-                chunks = await self._run_in_process_pool(chunk_book, segments)
+                segments = await run_in_process_pool(
+                    self._process_pool, extract_book, source
+                )
+                chunks = await run_in_process_pool(
+                    self._process_pool, chunk_book, segments
+                )
                 items = await self._embedder.aembed(chunks)
                 await run_in_threadpool(self._activate_index, index, items)
         except (Exception, asyncio.CancelledError) as error:
@@ -85,19 +85,6 @@ class BookIngestionService:
                 raise
             raise BookIngestionError(book_id=book_id, index_id=index.id) from error
         return index.id
-
-    async def _run_in_process_pool(
-        self, function: Callable[[Input], Output], argument: Input
-    ) -> Output:
-        future = asyncio.get_running_loop().run_in_executor(
-            self._process_pool, function, argument
-        )
-        try:
-            return await asyncio.shield(future)
-        except asyncio.CancelledError:
-            # Let the worker finish before the temporary PDF is removed.
-            await asyncio.gather(future, return_exceptions=True)
-            raise
 
     def _create_index(self, book_id: UUID) -> PendingIndex:
         with Session(self._engine) as session:

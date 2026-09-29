@@ -13,6 +13,7 @@ class BookPublic(BaseModel):
     filename: str
     status: BookStatus
     created_at: datetime
+    active_index_id: UUID | None = None
 
 
 class BookListParams(BaseModel):

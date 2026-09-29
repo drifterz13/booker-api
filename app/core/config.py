@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
@@ -24,6 +24,14 @@ class StorageConfig(Settings):
 
 class DatabaseConfig(Settings):
     database_url: str = "postgresql+psycopg://admin:mysecret@localhost:5432/booker"
+
+
+class EmbeddingConfig(Settings):
+    openai_api_key: SecretStr
+
+
+class IngestionConfig(Settings):
+    ingestion_workers: int = Field(default=1, ge=1)
 
 
 class IntegrationTestConfig(Settings):

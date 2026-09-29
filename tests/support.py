@@ -3,6 +3,7 @@
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import Mock
 
 import boto3
 import pymupdf
@@ -11,10 +12,12 @@ from alembic.config import Config as AlembicConfig
 from botocore.client import BaseClient
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError
+from langchain_core.embeddings import Embeddings
 from sqlalchemy.engine import Engine
 
 from app.core.config import DatabaseConfig, IntegrationTestConfig, StorageConfig
 from app.db.database import create_db_engine
+from app.models.book_index import EMBEDDING_DIMENSIONS
 
 
 @contextmanager
@@ -71,9 +74,20 @@ def storage_resources() -> Generator[tuple[StorageConfig, BaseClient], None, Non
         s3.close()
 
 
-def create_test_pdf() -> bytes:
+def create_test_pdf(*, bookmarks: bool = True) -> bytes:
     """Generate a one-page PDF for upload tests."""
     with pymupdf.open() as document:
         page = document.new_page()
-        page.insert_text((72, 72), "Book upload integration test")
+        page.insert_text((72, 100), "Book upload integration test")
+        if bookmarks:
+            document.set_toc([[1, "Chapter 1", 1]])
         return document.tobytes()
+
+
+def create_test_embeddings() -> Embeddings:
+    """Mock the provider boundary while keeping ingestion and storage real."""
+    embeddings = Mock(spec=Embeddings)
+    embeddings.aembed_documents.side_effect = lambda texts: [
+        [1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1) for _ in texts
+    ]
+    return embeddings

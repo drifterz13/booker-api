@@ -4,7 +4,7 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from pydantic import AfterValidator
 from sqlalchemy.exc import SQLAlchemyError
 
-from ..dependencies import BookServiceDep
+from ..dependencies import BookIngestionServiceDep, BookServiceDep, BookUploadServiceDep
 from ..schemas.book import BookListParams, BookPublic
 from ..services.books import (
     BookPersistenceError,
@@ -13,6 +13,8 @@ from ..services.books import (
     BookValidationError,
     validate_book_filename,
 )
+from ..services.ingest.books import BookIngestionError
+from ..services.ingest.pipeline import BookContentError
 
 router = APIRouter(prefix="/books", tags=["books"])
 
@@ -26,9 +28,12 @@ PdfUpload = Annotated[UploadFile, File(), AfterValidator(validate_pdf_upload)]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def create_book(file: PdfUpload, service: BookServiceDep) -> BookPublic:
+async def create_book(
+    file: PdfUpload, uploads: BookUploadServiceDep, ingestion: BookIngestionServiceDep
+) -> BookPublic:
     try:
-        book = service.create(filename=file.filename or "", source=file.file)
+        book = await uploads.create(filename=file.filename or "", source=file.file)
+        index_id = await ingestion.ingest(book.id)
     except BookTooLargeError as error:
         raise HTTPException(
             status.HTTP_413_CONTENT_TOO_LARGE, detail=str(error)
@@ -45,7 +50,30 @@ def create_book(file: PdfUpload, service: BookServiceDep) -> BookPublic:
             code,
             detail={"message": str(error), "book_id": str(error.book_id)},
         ) from error
-    return BookPublic.model_validate(book)
+    except BookIngestionError as error:
+        code = status.HTTP_502_BAD_GATEWAY
+        if isinstance(error.__cause__, BookContentError):
+            code = status.HTTP_422_UNPROCESSABLE_CONTENT
+        elif isinstance(error.__cause__, SQLAlchemyError):
+            code = status.HTTP_503_SERVICE_UNAVAILABLE
+        raise HTTPException(
+            code,
+            detail={
+                "message": str(error.__cause__)
+                if isinstance(error.__cause__, BookContentError)
+                else str(error),
+                "book_id": str(error.book_id),
+                "index_id": str(error.index_id),
+            },
+        ) from error
+    except SQLAlchemyError as error:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not persist book ingestion",
+        ) from error
+    return BookPublic.model_validate(book).model_copy(
+        update={"active_index_id": index_id}
+    )
 
 
 @router.get("")
