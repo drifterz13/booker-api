@@ -42,3 +42,8 @@ class IngestionPublic(BaseModel):
 
 class BookDetail(BookPublic):
     ingestion: IngestionPublic | None = None
+
+
+class BookPdf(BaseModel):
+    url: str
+    expires_in: int = 900

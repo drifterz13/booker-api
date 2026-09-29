@@ -26,6 +26,10 @@ class DatabaseConfig(Settings):
     database_url: str = "postgresql+psycopg://admin:mysecret@localhost:5432/booker"
 
 
+class CorsConfig(Settings):
+    cors_allowed_origins: list[str] = Field(default_factory=lambda: ["*"], min_length=1)
+
+
 class EmbeddingConfig(Settings):
     openai_api_key: SecretStr
 

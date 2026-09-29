@@ -6,10 +6,17 @@ from contextlib import AsyncExitStack, asynccontextmanager
 import httpx
 from fastapi import FastAPI
 from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.embeddings import Embeddings
 from langchain_openai import OpenAIEmbeddings
 
-from .core.config import DatabaseConfig, EmbeddingConfig, IngestionConfig, StorageConfig
+from .core.config import (
+    CorsConfig,
+    DatabaseConfig,
+    EmbeddingConfig,
+    IngestionConfig,
+    StorageConfig,
+)
 from .db.database import create_db_engine
 from .models.book_index import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL
 from .routers.books import router as books_router
@@ -22,6 +29,7 @@ def create_app(
     database_config: DatabaseConfig | None = None,
     storage_config: StorageConfig | None = None,
     ingestion_config: IngestionConfig | None = None,
+    cors_config: CorsConfig | None = None,
     embeddings: Embeddings | None = None,
 ) -> FastAPI:
     """Build an app with database, storage, process-pool, and client lifecycles."""
@@ -32,6 +40,7 @@ def create_app(
     ingestion_config = (
         ingestion_config if ingestion_config is not None else IngestionConfig()
     )
+    cors_config = cors_config if cors_config is not None else CorsConfig()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -67,6 +76,13 @@ def create_app(
             yield
 
     app = FastAPI(lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_config.cors_allowed_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["Content-Type"],
+    )
     app.include_router(books_router)
     app.include_router(uploads_router)
 

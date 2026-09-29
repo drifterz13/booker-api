@@ -138,6 +138,47 @@ class BooksIntegrationTests(unittest.TestCase):
             )
         self.embeddings.aembed_documents.assert_awaited_once()
 
+    def test_pdf_url_supports_browser_downloads(self):
+        key = self.store()
+        book = Book(filename=self.prefix + "viewer.pdf", object_key=key)
+        book_id = book.id
+        with Session(self.app.state.engine) as session:
+            session.add(book)
+            session.commit()
+        origin = "http://localhost:5173"
+        preflight = self.client.options(
+            "/books",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+        self.assertEqual(preflight.status_code, 200)
+        self.assertEqual(preflight.headers["access-control-allow-origin"], "*")
+        self.assertEqual(
+            self.client.options(
+                "/books",
+                headers={"Origin": origin, "Access-Control-Request-Method": "PATCH"},
+            ).status_code,
+            400,
+        )
+        response = self.client.get(f"/books/{book_id}/pdf", headers={"Origin": origin})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.headers["access-control-allow-origin"], "*")
+        self.assertEqual(response.json()["expires_in"], 900)
+        url = response.json()["url"]
+        with httpx.Client(timeout=10, trust_env=False) as client:
+            full = client.get(url, headers={"Origin": origin})
+        self.assertEqual(full.status_code, 200)
+        self.assertEqual(full.content, self.pdf)
+        self.assertEqual(full.headers["content-type"], "application/pdf")
+        self.assertIn(full.headers["access-control-allow-origin"], ("*", origin))
+        self.assertEqual(self.client.get(f"/books/{uuid4()}/pdf").status_code, 404)
+        self.s3.delete_object(Bucket=self.storage.s3_bucket_name, Key=key)
+        self.assertEqual(self.client.get(f"/books/{book_id}/pdf").status_code, 404)
+        self.embeddings.aembed_documents.assert_not_awaited()
+
     def test_response_is_sent_before_embedding_starts(self):
         """Inspect ASGI sends because TestClient waits for background tasks."""
         key = self.store()

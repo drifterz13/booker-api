@@ -12,6 +12,7 @@ from ..schemas.book import (
     BookCreate,
     BookDetail,
     BookListParams,
+    BookPdf,
     BookPublic,
     IngestionPublic,
 )
@@ -105,3 +106,22 @@ def get_book(book_id: UUID, service: BookServiceDep, storage: StorageDep) -> Boo
     except SQLAlchemyError as error:
         raise HTTPException(503, "Could not load the book") from error
     return book_detail(book, index, storage)
+
+
+@router.get("/{book_id}/pdf")
+def get_book_pdf(
+    book_id: UUID, service: BookServiceDep, storage: StorageDep
+) -> BookPdf:
+    """Return a temporary PDF URL, including while indexing is in progress."""
+    try:
+        book = service.get(book_id)
+        if book is None:
+            raise HTTPException(404, "Book does not exist")
+        storage.size(object_key=book.object_key)
+        return BookPdf(url=storage.presign_download(object_key=book.object_key))
+    except FileNotFoundError as error:
+        raise HTTPException(404, "Book PDF does not exist") from error
+    except (BotoCoreError, ClientError) as error:
+        raise HTTPException(502, "Could not access PDF storage") from error
+    except SQLAlchemyError as error:
+        raise HTTPException(503, "Could not load the book") from error

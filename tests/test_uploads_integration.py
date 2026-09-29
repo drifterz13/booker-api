@@ -61,8 +61,19 @@ class UploadsIntegrationTests(unittest.TestCase):
         parts = []
         with httpx.Client(timeout=15, trust_env=False) as client:
             for signed, content in zip(response.json(), contents, strict=True):
-                result = client.put(signed["url"], content=content)
+                result = client.put(
+                    signed["url"],
+                    content=content,
+                    headers={"Origin": "http://localhost:5173"},
+                )
                 self.assertEqual(result.status_code, 200, result.text)
+                self.assertIn(
+                    result.headers["access-control-allow-origin"],
+                    ("*", "http://localhost:5173"),
+                )
+                self.assertIn(
+                    "etag", result.headers["access-control-expose-headers"].lower()
+                )
                 parts.append(
                     {
                         "part_number": signed["part_number"],
