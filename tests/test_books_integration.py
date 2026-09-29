@@ -9,6 +9,7 @@ import pymupdf
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 from sqlmodel import Session, select
 
 from app.core.config import DatabaseConfig, IntegrationTestConfig, StorageConfig
@@ -130,6 +131,21 @@ class BooksIntegrationTests(unittest.TestCase):
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), "ok")
+
+    def test_pgvector_extension_and_cosine_distance(self):
+        with Session(self.app.state.engine) as session:
+            version = session.exec(
+                text("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
+            ).one()[0]
+            identical, orthogonal = session.exec(
+                text(
+                    "SELECT '[1,0,0]'::vector <=> '[1,0,0]'::vector, "
+                    "'[1,0,0]'::vector <=> '[0,1,0]'::vector"
+                )
+            ).one()
+        self.assertGreaterEqual(tuple(map(int, version.split("."))), (0, 8, 0))
+        self.assertAlmostEqual(identical, 0.0)
+        self.assertAlmostEqual(orthogonal, 1.0)
 
     def test_upload_persists_metadata_and_matching_pdf_bytes(self):
         response = self.upload(suffix="Book.PDF")
