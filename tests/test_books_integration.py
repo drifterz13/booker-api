@@ -1,11 +1,14 @@
 import hashlib
 import unittest
 from datetime import timedelta
+from pathlib import Path
 from tempfile import TemporaryFile
 from uuid import uuid4
 
 import boto3
 import pymupdf
+from alembic import command
+from alembic.config import Config as AlembicConfig
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
@@ -29,8 +32,12 @@ class BooksIntegrationTests(unittest.TestCase):
         cls.storage = StorageConfig(s3_bucket_name=config.test_s3_bucket_name)
         engine = create_db_engine(cls.database)
         try:
-            with engine.connect():
-                pass
+            with engine.begin() as connection:
+                migrations = AlembicConfig(
+                    str(Path(__file__).resolve().parents[1] / "alembic.ini")
+                )
+                migrations.attributes["connection"] = connection
+                command.upgrade(migrations, "head")
         finally:
             engine.dispose()
 

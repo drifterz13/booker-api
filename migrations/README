@@ -1,0 +1,5 @@
+Schema migrations for the FastAPI book API.
+
+Run `uv run alembic upgrade head` before starting the API.
+The URL comes from DatabaseConfig (.env or DATABASE_URL).
+See README.md for verified adoption of databases created with create_all().
