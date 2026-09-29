@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import BinaryIO
 
 import boto3
@@ -48,6 +49,10 @@ class ObjectStorage:
             object_key,
             ExtraArgs={"ContentType": "application/pdf"},
         )
+
+    def download(self, *, object_key: str, destination: Path) -> None:
+        """Download a PDF to a caller-owned local file."""
+        self._client.download_file(self._bucket_name, object_key, str(destination))
 
     def list(self, *, prefix: str = "books/") -> list[StoredObject]:
         """List object metadata across all pages, without downloading PDFs."""
