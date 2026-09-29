@@ -259,8 +259,8 @@ dependencies = [
     { name = "langchain-openai" },
     { name = "langchain-text-splitters" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic-settings" },
     { name = "pymupdf" },
-    { name = "python-dotenv" },
     { name = "sqlmodel" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -279,8 +279,8 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=1.6.6" },
     { name = "langchain-text-splitters", specifier = ">=1.1.2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
+    { name = "pydantic-settings", specifier = ">=2.15.0" },
     { name = "pymupdf", specifier = ">=1.28.2" },
-    { name = "python-dotenv", specifier = ">=1.2.3" },
     { name = "sqlmodel", specifier = ">=0.0.47" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54.0" },
 ]

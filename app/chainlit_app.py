@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import chainlit as cl
-from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 
 from app.core import Config
@@ -10,8 +9,6 @@ from app.db.vector_store import ChromaStore
 from app.services.ai import create_openai_model
 
 EMBEDDING_MODEL = "text-embedding-3-small"
-
-load_dotenv()
 
 
 @cl.on_chat_start
@@ -37,7 +34,7 @@ async def on_chat_start() -> None:
     status = await cl.Message(content=f"Indexing {uploaded.name}...").send()
 
     store: ChromaStore | None = None
-    conf = Config()
+    conf = Config()  # pyright: ignore[reportCallIssue]
     try:
         store = ChromaStore(config=conf)
         application = Application(

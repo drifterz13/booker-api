@@ -1,32 +1,19 @@
-import os
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Config:
-    def __init__(self) -> None:
-        chroma_api_key = os.getenv("CHROMA_API_KEY")
-        if not chroma_api_key:
-            raise ValueError("Missing required environment variable: 'CHROMA_API_KEY'")
+class Config(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
+    )
 
-        chroma_tenant = os.getenv("CHROMA_TENANT")
-        if not chroma_tenant:
-            raise ValueError("Missing required environment variable: 'CHROMA_TENANT'")
+    chroma_api_key: str
+    chroma_tenant: str
+    chroma_database: str
 
-        chroma_database = os.getenv("CHROMA_DATABASE")
-        if not chroma_database:
-            raise ValueError("Missing required environment variable: 'CHROMA_DATABASE'")
+    database_url: str = "postgresql://postgres:admin@mysecret:5432/booker"
 
-        self._chroma_api_key = chroma_api_key
-        self._chroma_tenant = chroma_tenant
-        self._chroma_database = chroma_database
+    openai_api_key: str = Field()
 
-    @property
-    def chroma_api_key(self) -> str:
-        return self._chroma_api_key
-
-    @property
-    def chroma_tenant(self) -> str:
-        return self._chroma_tenant
-
-    @property
-    def chroma_database(self) -> str:
-        return self._chroma_database
+    rustfs_access_key: str = "rustfs"
+    rustfs_secret_key: str = "secret"
