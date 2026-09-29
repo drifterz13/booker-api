@@ -2,9 +2,9 @@ from pathlib import Path
 
 from langchain_core.embeddings import Embeddings
 
-from ...services.chunker import Chunker, ChunkEmbedder
-from ...services.extractor import OutlineExtractor, ContentExtractor
 from ...db.vector_store import ChromaStore
+from ...services.chunker import ChunkEmbedder, Chunker
+from ...services.extractor import ContentExtractor, OutlineExtractor
 
 
 def reindex(
@@ -13,11 +13,11 @@ def reindex(
     store: ChromaStore,
     embeddings: Embeddings,
 ) -> int:
-    book = OutlineExtractor(src=source).extract()
-    if not book.sections:
+    document = OutlineExtractor(src=source).extract()
+    if not document.sections:
         raise ValueError("The PDF has no bookmarks to identify its sections")
 
-    segments = ContentExtractor().extract(book)
+    segments = ContentExtractor().extract(document)
     chunks = Chunker(chunk_size=2000, chunk_overlap=200).chunk(segments)
     if not chunks:
         raise ValueError("The PDF has no extractable section text")

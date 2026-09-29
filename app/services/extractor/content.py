@@ -1,20 +1,20 @@
 from typing import cast
 
-from app.models.content import ContentSegment, PageFragment
-
-from app.models import Book, Position
-from app.services.extractor.outline import BookExtractionError
 import pymupdf
+
+from app.models import PdfDocument, PdfPosition
+from app.models.content import ContentSegment, PageFragment
+from app.services.extractor.outline import PdfExtractionError
 
 
 class ContentExtractor:
-    def extract(self, book: Book) -> list[ContentSegment]:
-        entries = list(book.walk_with_path())
+    def extract(self, document: PdfDocument) -> list[ContentSegment]:
+        entries = list(document.walk_with_path())
         if not entries:
             return []
 
-        with pymupdf.open(book.source) as pdf:
-            document_end = Position(page=pdf.page_count, y=0.0)
+        with pymupdf.open(document.source) as pdf:
+            document_end = PdfPosition(page=pdf.page_count, y=0.0)
             segments: list[ContentSegment] = []
 
             for index, (section, path) in enumerate(entries):
@@ -40,11 +40,11 @@ class ContentExtractor:
     @staticmethod
     def _extract_fragments(
         pdf: pymupdf.Document,
-        start: Position,
-        end: Position,
+        start: PdfPosition,
+        end: PdfPosition,
     ) -> tuple[PageFragment, ...]:
         if end < start:
-            raise BookExtractionError(
+            raise PdfExtractionError(
                 f"Content end {end!r} appears before start {start!r}"
             )
 
