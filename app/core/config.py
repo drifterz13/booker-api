@@ -34,6 +34,19 @@ class EmbeddingConfig(Settings):
     openai_api_key: SecretStr
 
 
+class ChatConfig(EmbeddingConfig):
+    chat_model_name: str = Field(default="gpt-4o-mini", pattern=r"^[\w.-]+$")
+    chat_timeout_seconds: float = Field(default=120, gt=0)
+
+    @field_validator("openai_api_key")
+    @classmethod
+    def validate_api_key(cls, value: SecretStr) -> SecretStr:
+        key = value.get_secret_value().strip()
+        if not key:
+            raise ValueError("An OpenAI API key is required for chat")
+        return SecretStr(key)
+
+
 class IngestionConfig(Settings):
     ingestion_workers: int = Field(default=1, ge=1)
 

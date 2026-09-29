@@ -1,8 +1,9 @@
 [project]
 name = "booker-api"
 version = "0.1.0"
-requires-python = ">=3.11.4,<3.14"
+requires-python = ">=3.12,<3.14"
 dependencies = [
+    "pydantic-ai-slim[openai,ui]==2.51.0",
     "alembic>=1.20.0",
     "boto3>=1.43.104",
     "chainlit>=2.12.0",
