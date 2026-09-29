@@ -28,6 +28,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 WORKDIR /app
 COPY --from=builder --chown=booker:booker /app /app
+COPY --chown=booker:booker alembic.ini ./alembic.ini
+COPY --chown=booker:booker migrations ./migrations
 RUN chown booker:booker /app
 USER booker
 
