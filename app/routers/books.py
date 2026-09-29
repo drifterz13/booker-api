@@ -1,79 +1,64 @@
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
-from pydantic import AfterValidator
-from sqlalchemy.exc import SQLAlchemyError
+from botocore.exceptions import BotoCoreError, ClientError
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from ..dependencies import BookIngestionServiceDep, BookServiceDep, BookUploadServiceDep
-from ..schemas.book import BookListParams, BookPublic
-from ..services.books import (
-    BookPersistenceError,
-    BookTooLargeError,
-    BookUploadError,
-    BookValidationError,
-    validate_book_filename,
+from ..dependencies import BookIngestionServiceDep, BookServiceDep
+from ..schemas.book import (
+    BookCreate,
+    BookDetail,
+    BookListParams,
+    BookPublic,
+    IngestionPublic,
 )
-from ..services.ingest.books import BookIngestionError
-from ..services.ingest.pipeline import BookContentError
+from ..services.books import (
+    BookAlreadyExistsError,
+    BookTooLargeError,
+    BookValidationError,
+)
 
 router = APIRouter(prefix="/books", tags=["books"])
 
 
-def validate_pdf_upload(upload: UploadFile) -> UploadFile:
-    validate_book_filename(upload.filename or "")
-    return upload
-
-
-PdfUpload = Annotated[UploadFile, File(), AfterValidator(validate_pdf_upload)]
-
-
-@router.post("", status_code=status.HTTP_201_CREATED)
-async def create_book(
-    file: PdfUpload, uploads: BookUploadServiceDep, ingestion: BookIngestionServiceDep
-) -> BookPublic:
+@router.post("", status_code=status.HTTP_202_ACCEPTED)
+def create_book(
+    payload: BookCreate,
+    background_tasks: BackgroundTasks,
+    service: BookServiceDep,
+    ingestion: BookIngestionServiceDep,
+) -> BookDetail:
     try:
-        book = await uploads.create(filename=file.filename or "", source=file.file)
-        index_id = await ingestion.ingest(book.id)
-    except BookTooLargeError as error:
-        raise HTTPException(
-            status.HTTP_413_CONTENT_TOO_LARGE, detail=str(error)
-        ) from error
-    except BookValidationError as error:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
-    except (BookUploadError, BookPersistenceError) as error:
-        code = (
-            status.HTTP_502_BAD_GATEWAY
-            if isinstance(error, BookUploadError)
-            else status.HTTP_503_SERVICE_UNAVAILABLE
+        book, index = service.create(
+            filename=payload.filename, object_key=payload.object_key
         )
-        raise HTTPException(
-            code,
-            detail={"message": str(error), "book_id": str(error.book_id)},
-        ) from error
-    except BookIngestionError as error:
-        code = status.HTTP_502_BAD_GATEWAY
-        if isinstance(error.__cause__, BookContentError):
-            code = status.HTTP_422_UNPROCESSABLE_CONTENT
-        elif isinstance(error.__cause__, SQLAlchemyError):
-            code = status.HTTP_503_SERVICE_UNAVAILABLE
-        raise HTTPException(
-            code,
-            detail={
-                "message": str(error.__cause__)
-                if isinstance(error.__cause__, BookContentError)
-                else str(error),
-                "book_id": str(error.book_id),
-                "index_id": str(error.index_id),
-            },
-        ) from error
+    except BookTooLargeError as error:
+        raise HTTPException(413, str(error)) from error
+    except BookValidationError as error:
+        raise HTTPException(400, str(error)) from error
+    except BookAlreadyExistsError as error:
+        raise HTTPException(409, str(error)) from error
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (BotoCoreError, ClientError) as error:
+        raise HTTPException(502, "Could not access upload storage") from error
+    except IntegrityError as error:
+        if (
+            getattr(getattr(error.orig, "diag", None), "constraint_name", None)
+            == "book_object_key_key"
+        ):
+            raise HTTPException(
+                409, "The object is already registered as a book"
+            ) from error
+        raise HTTPException(503, "Could not persist the book") from error
     except SQLAlchemyError as error:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Could not persist book ingestion",
-        ) from error
-    return BookPublic.model_validate(book).model_copy(
-        update={"active_index_id": index_id}
+        raise HTTPException(503, "Could not persist the book") from error
+    response = BookDetail.model_validate(book).model_copy(
+        update={"ingestion": IngestionPublic.model_validate(index)}
     )
+    background_tasks.add_task(ingestion.ingest_in_background, index.id)
+    return response
 
 
 @router.get("")
@@ -83,7 +68,19 @@ def list_books(
     try:
         books = service.list(offset=params.offset, limit=params.limit)
     except SQLAlchemyError as error:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE, detail="Could not list books"
-        ) from error
+        raise HTTPException(503, "Could not list books") from error
     return [BookPublic.model_validate(book) for book in books]
+
+
+@router.get("/{book_id}")
+def get_book(book_id: UUID, service: BookServiceDep) -> BookDetail:
+    try:
+        book = service.get(book_id)
+        if book is None:
+            raise HTTPException(404, "Book does not exist")
+        index = service.latest_index(book_id)
+    except SQLAlchemyError as error:
+        raise HTTPException(503, "Could not load the book") from error
+    return BookDetail.model_validate(book).model_copy(
+        update={"ingestion": IngestionPublic.model_validate(index) if index else None}
+    )

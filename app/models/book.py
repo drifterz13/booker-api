@@ -27,7 +27,9 @@ class Book(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     filename: str
     object_key: str = Field(unique=True)
-    checksum: str = Field(max_length=64, description="SHA-256 of the PDF bytes")
+    checksum: str | None = Field(
+        default=None, max_length=64, description="SHA-256, populated during ingestion"
+    )
     active_index_id: UUID | None = Field(default=None)
     status: BookStatus = Field(default=BookStatus.UPLOADED)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

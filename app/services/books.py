@@ -1,20 +1,24 @@
 from pathlib import Path
-from typing import BinaryIO
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, select
 
-from ..models.book import Book, BookStatus
+from ..models.book import Book
+from ..models.book_index import BookIndex
+from .ingest.pipeline import PIPELINE_VERSION
 from .storage.storage import ObjectStorage
 
 
 class BookValidationError(ValueError):
-    """The upload does not meet the book upload requirements."""
+    """The object does not meet the book requirements."""
 
 
 class BookTooLargeError(BookValidationError):
     """The PDF exceeds the upload limit."""
+
+
+class BookAlreadyExistsError(ValueError):
+    """The object is already registered as a book."""
 
 
 def validate_book_filename(filename: str) -> str:
@@ -23,101 +27,58 @@ def validate_book_filename(filename: str) -> str:
     return filename
 
 
-class BookServiceError(RuntimeError):
-    """An external operation failed; retain identifiers for reconciliation."""
-
-    def __init__(self, message: str, *, book_id: UUID, object_key: str) -> None:
-        super().__init__(message)
-        self.book_id = book_id
-        self.object_key = object_key
-
-
-class BookUploadError(BookServiceError):
-    """Object storage could not upload the book."""
-
-
-class BookPersistenceError(BookServiceError):
-    """The database could not save or reload the book's state."""
-
-
 class BookService:
-    """Coordinate upload metadata and PDF storage using a dedicated session.
-
-    The caller owns the session and seekable binary stream. This service commits
-    its own writes; supply a session without unrelated pending changes.
-    """
+    """Register completed objects and read book metadata."""
 
     MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
-    def __init__(
-        self,
-        *,
-        session: Session,
-        storage: ObjectStorage,
-    ) -> None:
+    def __init__(self, *, session: Session, storage: ObjectStorage) -> None:
         self._session = session
         self._storage = storage
 
-    def create(self, *, filename: str, source: BinaryIO, checksum: str) -> Book:
-        """Persist an already validated PDF and record its upload lifecycle.
-
-        A storage failure leaves a failed row. If persistence fails after upload,
-        the object may exist with an uploading row; the error carries its ID/key.
-        No database transaction is held open during the storage upload.
-        """
+    def create(self, *, filename: str, object_key: str) -> tuple[Book, BookIndex]:
+        """Commit the book and its building index before scheduling ingestion."""
         validate_book_filename(filename)
-        book_id = uuid4()
-        object_key = f"books/{book_id}.pdf"
-        book = Book(
-            id=book_id,
-            filename=filename,
-            object_key=object_key,
-            checksum=checksum,
-            status=BookStatus.UPLOADING,
-        )
+        size = self._storage.size(object_key=object_key)
+        if size == 0:
+            raise BookValidationError("The PDF is empty")
+        if size > self.MAX_UPLOAD_BYTES:
+            raise BookTooLargeError(
+                f"The PDF exceeds the {self.MAX_UPLOAD_BYTES}-byte upload limit"
+            )
+        if self._session.exec(
+            select(Book).where(Book.object_key == object_key)
+        ).first():
+            raise BookAlreadyExistsError("The object is already registered as a book")
+        book = Book(filename=filename, object_key=object_key)
+        index = BookIndex(book_id=book.id, pipeline_version=PIPELINE_VERSION)
+        self._session.add(book)
+        self._session.flush()
+        self._session.add(index)
+        self._session.commit()
+        self._session.refresh(book)
+        self._session.refresh(index)
+        return book, index
 
-        try:
-            self._session.add(book)
-            self._session.commit()
+    def get(self, book_id: UUID) -> Book | None:
+        return self._session.get(Book, book_id)
 
-            # Use the local key: reading expired ORM attributes after commit
-            # would start another transaction before the upload.
-            try:
-                self._storage.upload(source, object_key=object_key)
-            except Exception as error:
-                book.status = BookStatus.FAILED
-                self._session.add(book)
-                self._session.commit()
-                raise BookUploadError(
-                    "Could not upload the book",
-                    book_id=book_id,
-                    object_key=object_key,
-                ) from error
-
-            book.status = BookStatus.UPLOADED
-            self._session.add(book)
-            self._session.commit()
-            self._session.refresh(book)
-        except SQLAlchemyError as error:
-            self._session.rollback()
-            raise BookPersistenceError(
-                "Could not persist the book's upload state",
-                book_id=book_id,
-                object_key=object_key,
-            ) from error
-
-        return book
+    def latest_index(self, book_id: UUID) -> BookIndex | None:
+        return self._session.exec(
+            select(BookIndex)
+            .where(BookIndex.book_id == book_id)
+            .order_by(BookIndex.created_at.desc(), BookIndex.id.desc())
+            .limit(1)
+        ).first()
 
     def list(self, *, offset: int = 0, limit: int = 20) -> list[Book]:
-        """List metadata from the database, newest first, including failures."""
-        if offset < 0:
-            raise ValueError("offset must be non-negative")
-        if limit <= 0:
-            raise ValueError("limit must be positive")
-        statement = (
-            select(Book)
-            .order_by(Book.created_at.desc(), Book.id.desc())
-            .offset(offset)
-            .limit(limit)
+        if offset < 0 or limit <= 0:
+            raise ValueError("Invalid pagination")
+        return list(
+            self._session.exec(
+                select(Book)
+                .order_by(Book.created_at.desc(), Book.id.desc())
+                .offset(offset)
+                .limit(limit)
+            ).all()
         )
-        return list(self._session.exec(statement).all())

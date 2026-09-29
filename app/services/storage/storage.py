@@ -6,6 +6,7 @@ from typing import BinaryIO
 
 import boto3
 from botocore.client import Config as BotoConfig
+from botocore.exceptions import ClientError
 
 from ...core.config import StorageConfig
 
@@ -95,6 +96,19 @@ class ObjectStorage:
     def download(self, *, object_key: str, destination: Path) -> None:
         """Download a PDF to a caller-owned local file."""
         self._client.download_file(self._bucket_name, object_key, str(destination))
+
+    def size(self, *, object_key: str) -> int:
+        """Read the size of a completed object without downloading it."""
+        try:
+            return self._client.head_object(Bucket=self._bucket_name, Key=object_key)[
+                "ContentLength"
+            ]
+        except ClientError as error:
+            if error.response["ResponseMetadata"]["HTTPStatusCode"] == 404:
+                # HEAD does not distinguish a missing object from a missing bucket.
+                self._client.head_bucket(Bucket=self._bucket_name)
+                raise FileNotFoundError("Completed upload does not exist") from error
+            raise
 
     def list(self, *, prefix: str = "books/") -> list[StoredObject]:
         """List object metadata across all pages, without downloading PDFs."""

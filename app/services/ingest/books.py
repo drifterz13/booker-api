@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,10 +15,13 @@ from ...db.vector_store.pgvector import PgVectorStore
 from ...models import Book, BookIndex, EmbeddedChunk
 from ...models.book import BookStatus
 from ...models.book_index import BookIndexStatus
+from ..books import BookService, BookTooLargeError
 from ..chunker import ChunkEmbedder
 from ..process_pool import run_in_process_pool
 from ..storage.storage import ObjectStorage
-from .pipeline import PIPELINE_VERSION, chunk_book, extract_book
+from .pipeline import PIPELINE_VERSION, chunk_book, extract_book, verify_pdf
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +64,31 @@ class BookIngestionService:
     async def ingest(self, book_id: UUID) -> UUID:
         """Create a new version and return its ID after successful activation."""
         index = await run_in_threadpool(self._create_index, book_id)
+        return await self._ingest(index)
+
+    async def ingest_index(self, index_id: UUID) -> UUID:
+        """Process the building index already committed by book creation."""
+        index = await run_in_threadpool(self._load_index, index_id)
+        return await self._ingest(index)
+
+    async def ingest_in_background(self, index_id: UUID) -> None:
+        """Persist failures and log them after the HTTP response is sent."""
+        try:
+            await self.ingest_index(index_id)
+        except Exception:
+            logger.exception("Background ingestion failed for index %s", index_id)
+
+    def _load_index(self, index_id: UUID) -> PendingIndex:
+        with Session(self._engine) as session:
+            index = session.get(BookIndex, index_id)
+            if index is None or index.status != BookIndexStatus.BUILDING:
+                raise ValueError("Index is not available for ingestion")
+            book = session.get(Book, index.book_id)
+            if book is None or book.status != BookStatus.UPLOADED:
+                raise ValueError("The uploaded book is not available")
+            return PendingIndex(index.id, book.id, book.object_key)
+
+    async def _ingest(self, index: PendingIndex) -> UUID:
         try:
             with TemporaryDirectory(prefix="booker-ingest-") as directory:
                 source = Path(directory) / "book.pdf"
@@ -68,6 +97,14 @@ class BookIngestionService:
                     object_key=index.object_key,
                     destination=source,
                 )
+                metadata = await run_in_threadpool(source.stat)
+                if metadata.st_size > BookService.MAX_UPLOAD_BYTES:
+                    raise BookTooLargeError(
+                        "The downloaded PDF exceeds the upload limit"
+                    )
+                checksum = await run_in_process_pool(
+                    self._process_pool, verify_pdf, source
+                )
                 segments = await run_in_process_pool(
                     self._process_pool, extract_book, source
                 )
@@ -75,7 +112,7 @@ class BookIngestionService:
                     self._process_pool, chunk_book, segments
                 )
                 items = await self._embedder.aembed(chunks)
-                await run_in_threadpool(self._activate_index, index, items)
+                await run_in_threadpool(self._activate_index, index, items, checksum)
         except (Exception, asyncio.CancelledError) as error:
             try:
                 await run_in_threadpool(self._mark_failed, index.id)
@@ -83,7 +120,9 @@ class BookIngestionService:
                 error.add_note("Could not persist the failed ingestion status")
             if isinstance(error, asyncio.CancelledError):
                 raise
-            raise BookIngestionError(book_id=book_id, index_id=index.id) from error
+            raise BookIngestionError(
+                book_id=index.book_id, index_id=index.id
+            ) from error
         return index.id
 
     def _create_index(self, book_id: UUID) -> PendingIndex:
@@ -100,7 +139,7 @@ class BookIngestionService:
             return pending
 
     def _activate_index(
-        self, pending: PendingIndex, items: list[EmbeddedChunk]
+        self, pending: PendingIndex, items: list[EmbeddedChunk], checksum: str
     ) -> None:
         with Session(self._engine) as session, session.begin():
             # Lock the book first to serialize activation of different versions.
@@ -114,6 +153,7 @@ class BookIngestionService:
             index.chunk_count = count
             index.status = BookIndexStatus.READY
             book.active_index_id = pending.id
+            book.checksum = checksum
             session.add_all([index, book])
 
     def _mark_failed(self, index_id: UUID) -> None:

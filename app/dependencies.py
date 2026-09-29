@@ -8,7 +8,6 @@ from .services.books import BookService
 from .services.chunker import ChunkEmbedder
 from .services.ingest.books import BookIngestionService
 from .services.storage.storage import ObjectStorage
-from .services.upload import BookUploadService
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
@@ -25,17 +24,6 @@ def get_book_service(session: SessionDep, storage: StorageDep) -> BookService:
 
 
 BookServiceDep = Annotated[BookService, Depends(get_book_service)]
-
-
-def get_book_upload_service(request: Request, storage: StorageDep) -> BookUploadService:
-    return BookUploadService(
-        engine=request.app.state.engine,
-        storage=storage,
-        process_pool=request.app.state.process_pool,
-    )
-
-
-BookUploadServiceDep = Annotated[BookUploadService, Depends(get_book_upload_service)]
 
 
 def get_book_ingestion_service(

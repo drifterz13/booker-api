@@ -1,9 +1,9 @@
+import hashlib
 from pathlib import Path
 
 import pymupdf
 
 from ...models import Chunk, ContentSegment
-from ..books import BookValidationError
 from ..chunker import Chunker
 from ..extractor import ContentExtractor, OutlineExtractor
 
@@ -15,13 +15,20 @@ class BookContentError(ValueError):
 
 
 def validate_pdf(content: bytes) -> None:
-    """Check PDF readability in the worker process before storing an upload."""
+    """Check PDF readability in the worker process."""
     try:
         with pymupdf.open(stream=content, filetype="pdf") as document:
             if not document.is_pdf or document.page_count == 0:
-                raise BookValidationError("The upload must be a PDF with pages")
+                raise BookContentError("The upload must be a PDF with pages")
     except pymupdf.FileDataError as error:
-        raise BookValidationError("The upload is not a readable PDF") from error
+        raise BookContentError("The upload is not a readable PDF") from error
+
+
+def verify_pdf(source: Path) -> str:
+    """Validate the downloaded PDF and calculate its SHA-256."""
+    content = source.read_bytes()
+    validate_pdf(content)
+    return hashlib.sha256(content).hexdigest()
 
 
 def extract_book(source: Path) -> list[ContentSegment]:
