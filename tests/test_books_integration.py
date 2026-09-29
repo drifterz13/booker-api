@@ -1,25 +1,18 @@
 import hashlib
 import unittest
 from datetime import timedelta
-from pathlib import Path
 from tempfile import TemporaryFile
 from uuid import uuid4
 
-import boto3
-import pymupdf
-from alembic import command
-from alembic.config import Config as AlembicConfig
-from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlmodel import Session, select
 
-from app.core.config import DatabaseConfig, IntegrationTestConfig, StorageConfig
-from app.db.database import create_db_engine
 from app.main import create_app
 from app.models.book import Book, BookStatus
 from app.services.books import BookService
+from tests.support import create_test_pdf, database_resources, storage_resources
 
 
 class BooksIntegrationTests(unittest.TestCase):
@@ -27,46 +20,8 @@ class BooksIntegrationTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        config = IntegrationTestConfig()
-        cls.database = DatabaseConfig(database_url=config.test_database_url)
-        cls.storage = StorageConfig(s3_bucket_name=config.test_s3_bucket_name)
-        engine = create_db_engine(cls.database)
-        try:
-            with engine.begin() as connection:
-                migrations = AlembicConfig(
-                    str(Path(__file__).resolve().parents[1] / "alembic.ini")
-                )
-                migrations.attributes["connection"] = connection
-                command.upgrade(migrations, "head")
-        finally:
-            engine.dispose()
-
-        cls.s3 = boto3.client(
-            "s3",
-            endpoint_url=cls.storage.s3_endpoint_url,
-            aws_access_key_id=cls.storage.aws_access_key_id,
-            aws_secret_access_key=cls.storage.aws_secret_key,
-            region_name=cls.storage.s3_region_name,
-            config=BotoConfig(
-                signature_version="s3v4",
-                s3={"addressing_style": "path"},
-                connect_timeout=3,
-                read_timeout=5,
-                retries={"total_max_attempts": 1},
-            ),
-        )
-        cls.addClassCleanup(cls.s3.close)
-        try:
-            cls.s3.head_bucket(Bucket=cls.storage.s3_bucket_name)
-        except ClientError as error:
-            if error.response["ResponseMetadata"]["HTTPStatusCode"] != 404:
-                raise
-            options = {"Bucket": cls.storage.s3_bucket_name}
-            if cls.storage.s3_region_name != "us-east-1":
-                options["CreateBucketConfiguration"] = {
-                    "LocationConstraint": cls.storage.s3_region_name
-                }
-            cls.s3.create_bucket(**options)
+        cls.database, cls.engine = cls.enterClassContext(database_resources())
+        cls.storage, cls.s3 = cls.enterClassContext(storage_resources())
 
     def setUp(self):
         self.prefix = f"integration-{uuid4().hex}-"
@@ -76,10 +31,7 @@ class BooksIntegrationTests(unittest.TestCase):
         self.client = self.enterContext(TestClient(self.app))
         # Registered after the client so cleanup runs before its engine closes.
         self.addCleanup(self.cleanup_books)
-        with pymupdf.open() as document:
-            page = document.new_page()
-            page.insert_text((72, 72), "Book upload integration test")
-            self.pdf = document.tobytes()
+        self.pdf = create_test_pdf()
 
     def books(self):
         with Session(self.app.state.engine) as session:
