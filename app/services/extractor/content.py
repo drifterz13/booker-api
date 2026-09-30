@@ -10,10 +10,22 @@ from app.services.extractor.outline import PdfExtractionError
 class ContentExtractor:
     def extract(self, document: PdfDocument) -> list[ContentSegment]:
         entries = list(document.walk_with_path())
-        if not entries:
-            return []
-
         with pymupdf.open(document.source) as pdf:
+            if not entries:
+                start = PdfPosition(page=0)
+                end = PdfPosition(page=pdf.page_count, y=0.0)
+                fragments = self._extract_fragments(pdf, start, end)
+                return [
+                    ContentSegment(
+                        title="",
+                        level=0,
+                        path=(),
+                        start=start,
+                        end=end,
+                        fragments=fragments,
+                    )
+                ]
+
             document_end = PdfPosition(page=pdf.page_count, y=0.0)
             segments: list[ContentSegment] = []
 

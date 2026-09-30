@@ -34,8 +34,6 @@ def verify_pdf(source: Path) -> str:
 def extract_book(source: Path) -> list[ContentSegment]:
     """Extract book sections and their PDF text."""
     document = OutlineExtractor(src=source).extract()
-    if not document.sections:
-        raise BookContentError("The PDF has no bookmarks to identify its sections")
     return ContentExtractor().extract(document)
 
 

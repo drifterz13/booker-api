@@ -61,10 +61,10 @@ class IngestionIntegrationTests(unittest.IsolatedAsyncioTestCase):
             page.insert_text(
                 (72, 100), "PostgreSQL stores book chunks and their embeddings."
             )
-            pdf.set_toc([[1, "Chapter 1", 1]])
             content = pdf.tobytes()
-            pdf.set_toc([])
-            without_bookmarks = pdf.tobytes()
+        with pymupdf.open() as pdf:
+            pdf.new_page()
+            without_text = pdf.tobytes()
         self.storage.upload(BytesIO(content), object_key=object_key)
         with Session(self.engine) as session:
             session.add(book)
@@ -89,11 +89,11 @@ class IngestionIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 list(chunk.embedding), index_id=index_id
             )
             self.assertIn("PostgreSQL", hits[0].text)
-            self.assertEqual(hits[0].path, ("Chapter 1",))
+            self.assertEqual(hits[0].path, ())
             self.assertEqual(hits[0].pages, (0,))
 
         # A real extraction failure must preserve the ready version.
-        self.storage.upload(BytesIO(without_bookmarks), object_key=object_key)
+        self.storage.upload(BytesIO(without_text), object_key=object_key)
         with self.assertRaises(BookIngestionError) as failed:
             await service.ingest(book_id)
         with Session(self.engine) as session:
