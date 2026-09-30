@@ -10,7 +10,7 @@ from sqlmodel import Session
 from ....db.vector_store.pgvector import PgVectorStore
 from ....models.book import Book
 from ....models.book_index import BookIndex, BookIndexStatus
-from ....models.search import SearchHit
+from ....models.search import BookSearchResult, RetrievedPassage, SearchHit
 
 
 class BookNotFoundError(ValueError):
@@ -56,29 +56,31 @@ class BookSearch:
         with Session(self._engine) as session:
             return PgVectorStore(session).search(vector, index_id=self.index_id)
 
-    async def search(self, query: str) -> dict:
+    async def search(self, query: str) -> BookSearchResult:
         """Return the result when incremental search phases are not needed."""
         async for update in self.stream_search(query):
-            if isinstance(update, dict):
+            if isinstance(update, BookSearchResult):
                 return update
         raise RuntimeError("Book search ended without a result")
 
-    async def stream_search(self, query: str) -> AsyncIterator[SearchPhase | dict]:
+    async def stream_search(
+        self, query: str
+    ) -> AsyncIterator[SearchPhase | BookSearchResult]:
         """Yield actual processing phases, followed by retrieved evidence."""
         yield SearchPhase.EMBEDDING_QUERY
         vector = await self._embeddings.aembed_query(query)
         yield SearchPhase.SEARCHING_BOOK
         hits = await run_in_threadpool(self._search, vector)
-        yield {
-            "book_id": str(self.book_id),
-            "index_id": str(self.index_id),
-            "passages": [
-                {
-                    "chunk_id": str(hit.chunk_id),
-                    "text": hit.text,
-                    "section_path": list(hit.path),
-                    "pdf_pages": [page + 1 for page in hit.pages],
-                }
+        yield BookSearchResult(
+            book_id=self.book_id,
+            index_id=self.index_id,
+            passages=[
+                RetrievedPassage(
+                    chunk_id=hit.chunk_id,
+                    text=hit.text,
+                    section_path=list(hit.path),
+                    pdf_pages=[page + 1 for page in hit.pages],
+                )
                 for hit in hits
             ],
-        }
+        )

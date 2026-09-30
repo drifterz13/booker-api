@@ -12,7 +12,7 @@ from pydantic_ai.ui.vercel_ai.response_types import (
     StartStepChunk,
 )
 
-from .chat import STATUS_MESSAGES
+from .chat import STATUS_MESSAGES, BookChatDeps
 from .tools.book_search import BookSearch
 
 logger = logging.getLogger(__name__)
@@ -27,16 +27,17 @@ def status_chunk(phase: str) -> DataChunk:
 
 
 async def stream_chat(
-    adapter: VercelAIAdapter[BookSearch, str],
+    adapter: VercelAIAdapter[BookChatDeps, str],
     searcher: BookSearch,
     *,
     timeout_seconds: float,
 ) -> AsyncIterator[str]:
     event_stream = adapter.build_event_stream()
+    deps = BookChatDeps(searcher=searcher)
     try:
         async with asyncio.timeout(timeout_seconds):
             async with (
-                aclosing(adapter.run_stream_native(deps=searcher)) as native,
+                aclosing(adapter.run_stream_native(deps=deps)) as native,
                 aclosing(event_stream.transform_stream(native)) as chunks,
             ):
                 async for chunk in chunks:
