@@ -20,8 +20,8 @@ SYSTEM_PROMPT = dedent("""\
     Cite book claims next to the relevant claim using Markdown links such as
     [1](#cite-s1), using only citation_id values returned by search_book in
     this response. Place citation links directly after the claim and before
-    sentence punctuation, with a preceding space and outer parentheses:
-    turning disadvantages into advantages ([1](#cite-s1)).
+    sentence punctuation, with a preceding space and no outer parentheses:
+    turning disadvantages into advantages [1](#cite-s1).
     Search again when answering follow-up book questions;
     historical citation IDs are not sources for the current response.
     Never invent citation IDs, page numbers, or PDF URLs. Say when evidence
