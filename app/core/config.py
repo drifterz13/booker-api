@@ -49,6 +49,16 @@ class IngestionConfig(Settings):
     ingestion_workers: int = Field(default=1, ge=1)
 
 
+class ObservabilityConfig(Settings):
+    phoenix_collector_endpoint: str | None = None
+    phoenix_project_name: str = Field(default="booker-local", min_length=1)
+
+    @field_validator("phoenix_collector_endpoint")
+    @classmethod
+    def normalize_endpoint(cls, value: str | None) -> str | None:
+        return value.strip().rstrip("/") or None if value is not None else None
+
+
 class IntegrationTestConfig(Settings):
     test_database_url: str = (
         "postgresql+psycopg://admin:mysecret@localhost:5432/booker-test"

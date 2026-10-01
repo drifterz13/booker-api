@@ -20,7 +20,15 @@ from .services.ai.tools.book_search import (
 from .services.books import BookService
 from .services.chunker import ChunkEmbedder
 from .services.ingest.books import BookIngestionService
+from .services.observability import NO_OBSERVABILITY, Observability
 from .services.storage.storage import ObjectStorage
+
+
+def get_observability(request: Request) -> Observability:
+    return getattr(request.app.state, "observability", NO_OBSERVABILITY)
+
+
+ObservabilityDep = Annotated[Observability, Depends(get_observability)]
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
@@ -55,12 +63,15 @@ BookIngestionServiceDep = Annotated[
 ]
 
 
-def get_book_search(book_id: UUID, request: Request) -> BookSearch:
+def get_book_search(
+    book_id: UUID, request: Request, observability: ObservabilityDep
+) -> BookSearch:
     try:
         return BookSearch(
             engine=request.app.state.engine,
             embeddings=request.app.state.embeddings,
             book_id=book_id,
+            observability=observability,
         )
     except BookNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error

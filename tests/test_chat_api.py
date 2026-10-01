@@ -30,6 +30,9 @@ EVIDENCE = BookSearchResult(
 class FixedBookSearch:
     """Replace retrieval at its boundary, leaving the agent and SSE adapter real."""
 
+    book_id = EVIDENCE.book_id
+    index_id = EVIDENCE.index_id
+
     async def stream_search(self, query):
         yield SearchPhase.EMBEDDING_QUERY
         yield SearchPhase.SEARCHING_BOOK

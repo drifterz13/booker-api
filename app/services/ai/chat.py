@@ -5,7 +5,9 @@ from textwrap import dedent
 from typing import Any
 
 from pydantic_ai import Agent, CustomEvent, RunContext
+from pydantic_ai.capabilities import Instrumentation
 from pydantic_ai.models import Model
+from pydantic_ai.models.instrumented import InstrumentationSettings
 from pydantic_ai.ui.vercel_ai.response_types import DataChunk
 
 from ...schemas.citation import CitationData, CitedSearchResult
@@ -68,8 +70,16 @@ class StatusEvent(CustomEvent, name="status"):
         return data
 
 
-def create_book_agent(model: Model) -> Agent[BookChatDeps, str]:
-    agent = Agent(model, deps_type=BookChatDeps, instructions=SYSTEM_PROMPT)
+def create_book_agent(
+    model: Model, *, instrument: InstrumentationSettings | None = None
+) -> Agent[BookChatDeps, str]:
+    agent = Agent(
+        model,
+        name="book_chat",
+        deps_type=BookChatDeps,
+        instructions=SYSTEM_PROMPT,
+        capabilities=[Instrumentation(instrument)] if instrument else [],
+    )
 
     @agent.tool
     async def search_book(

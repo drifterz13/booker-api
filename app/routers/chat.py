@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
 
-from ..dependencies import BookSearchDep, ChatConfigDep, ChatModelDep
+from ..dependencies import BookSearchDep, ChatConfigDep, ChatModelDep, ObservabilityDep
 from ..schemas.chat import ChatRequest
 from ..services.ai.chat import create_book_agent
 from ..services.ai.ui_stream import stream_chat
@@ -20,8 +20,12 @@ async def chat_book(
     searcher: BookSearchDep,
     model: ChatModelDep,
     config: ChatConfigDep,
+    observability: ObservabilityDep,
 ) -> StreamingResponse:
-    adapter = VercelAIAdapter(agent=create_book_agent(model), run_input=body)
+    adapter = VercelAIAdapter(
+        agent=create_book_agent(model, instrument=observability.instrumentation),
+        run_input=body,
+    )
     try:
         _ = adapter.messages  # Validate history conversion before sending SSE headers.
     except ValueError as error:
@@ -31,6 +35,8 @@ async def chat_book(
             adapter,
             searcher,
             timeout_seconds=config.chat_timeout_seconds,
+            observability=observability,
+            session_id=body.id,
         ),
         media_type="text/event-stream",
         headers={

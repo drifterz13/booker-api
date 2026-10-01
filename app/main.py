@@ -15,6 +15,7 @@ from .core.config import (
     DatabaseConfig,
     EmbeddingConfig,
     IngestionConfig,
+    ObservabilityConfig,
     StorageConfig,
 )
 from .db.database import create_db_engine
@@ -22,6 +23,7 @@ from .models.book_index import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL
 from .routers.books import router as books_router
 from .routers.chat import router as chat_router
 from .routers.uploads import router as uploads_router
+from .services.observability import create_observability
 from .services.storage.storage import ObjectStorage
 
 
@@ -31,6 +33,7 @@ def create_app(
     storage_config: StorageConfig | None = None,
     ingestion_config: IngestionConfig | None = None,
     cors_config: CorsConfig | None = None,
+    observability_config: ObservabilityConfig | None = None,
     embeddings: Embeddings | None = None,
 ) -> FastAPI:
     """Build an app with database, storage, process-pool, and client lifecycles."""
@@ -42,10 +45,18 @@ def create_app(
         ingestion_config if ingestion_config is not None else IngestionConfig()
     )
     cors_config = cors_config if cors_config is not None else CorsConfig()
+    observability_config = (
+        observability_config
+        if observability_config is not None
+        else ObservabilityConfig()
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         async with AsyncExitStack() as resources:
+            observability = create_observability(observability_config)
+            resources.push_async_callback(run_in_threadpool, observability.close)
+            app.state.observability = observability
             engine = create_db_engine(database_config)
             resources.push_async_callback(run_in_threadpool, engine.dispose)
             storage = await run_in_threadpool(ObjectStorage, config=storage_config)

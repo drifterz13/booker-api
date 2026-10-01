@@ -11,6 +11,7 @@ from ....db.vector_store.pgvector import PgVectorStore
 from ....models.book import Book
 from ....models.book_index import BookIndex, BookIndexStatus
 from ....models.search import BookSearchResult, RetrievedPassage, SearchHit
+from ...observability import NO_OBSERVABILITY, Observability
 
 
 class BookNotFoundError(ValueError):
@@ -29,11 +30,19 @@ class SearchPhase(StrEnum):
 class BookSearch:
     """Retrieve evidence from the active index captured at request start."""
 
+    _observability = NO_OBSERVABILITY
+
     def __init__(
-        self, *, engine: Engine, embeddings: Embeddings, book_id: UUID
+        self,
+        *,
+        engine: Engine,
+        embeddings: Embeddings,
+        book_id: UUID,
+        observability: Observability = NO_OBSERVABILITY,
     ) -> None:
         self._engine = engine
         self._embeddings = embeddings
+        self._observability = observability
         self.book_id = book_id
         with Session(engine) as session:
             book = session.get(Book, book_id)
@@ -70,7 +79,11 @@ class BookSearch:
         yield SearchPhase.EMBEDDING_QUERY
         vector = await self._embeddings.aembed_query(query)
         yield SearchPhase.SEARCHING_BOOK
-        hits = await run_in_threadpool(self._search, vector)
+        with self._observability.retrieval(
+            query, book_id=str(self.book_id), index_id=str(self.index_id)
+        ) as span:
+            hits = await run_in_threadpool(self._search, vector)
+            self._observability.record_hits(span, hits)
         yield BookSearchResult(
             book_id=self.book_id,
             index_id=self.index_id,

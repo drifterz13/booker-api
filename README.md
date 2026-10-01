@@ -53,4 +53,4 @@ Start Phoenix with its own persistent SQLite storage:
 docker compose up -d --wait phoenix
 ```
 
-Open http://localhost:6006 for the Phoenix UI. 
+Open http://localhost:6006 for the Phoenix UI.
