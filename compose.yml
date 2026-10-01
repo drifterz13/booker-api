@@ -12,6 +12,22 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
 
+  phoenix:
+    image: arizephoenix/phoenix:version-20.18.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6006:6006"
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    volumes:
+      - phoenix_data:/mnt/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:6006/healthz', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   adminer:
     image: adminer
     restart: always
@@ -38,3 +54,4 @@ services:
 volumes:
   postgres_data:
   rustfs_data:
+  phoenix_data:

@@ -44,3 +44,13 @@ make dev
 Open http://localhost:8000/docs to use the API.
 
 The Docker image starts the same FastAPI application on port 8000.
+
+## Local observability
+
+Start Phoenix with its own persistent SQLite storage:
+
+```sh
+docker compose up -d --wait phoenix
+```
+
+Open http://localhost:6006 for the Phoenix UI. 
