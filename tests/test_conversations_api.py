@@ -1,16 +1,24 @@
+import json
 import unittest
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
+from pydantic_ai.messages import ModelRequest, ToolReturnPart, UserPromptPart
+from pydantic_ai.models.function import DeltaToolCall, FunctionModel
 from sqlalchemy import delete
-from sqlmodel import Session
+from sqlmodel import Session, col
 
+from app.core.config import ChatConfig
 from app.db.database import get_session
+from app.dependencies import get_book_search, get_chat_config, get_chat_model
 from app.models.book import Book
 from app.models.conversation import Conversation, ConversationMessage, ConversationRole
+from app.models.search import BookSearchResult, RetrievedPassage
 from app.routers.conversations import router
+from app.services.ai.tools.book_search import SearchPhase
 from tests.support import database_resources
 
 
@@ -70,7 +78,6 @@ class ConversationsApiTests(unittest.TestCase):
                     {"type": "text", "text": "Practice helps [1](#cite-s1)."},
                 ],
             },
-            model_messages=[{"internal": "do not expose"}],
         )
         with Session(self.engine) as session:
             session.add_all([book, other_book, older, newer, another_book])
@@ -79,19 +86,71 @@ class ConversationsApiTests(unittest.TestCase):
             session.commit()
 
         app = FastAPI()
+        self.app = app
         app.include_router(router)
+        app.state.engine = self.engine
+
+        class FixedSearch:
+            index_id = uuid4()
+
+            def __init__(self, book_id):
+                self.book_id = book_id
+
+            async def stream_search(self, query):
+                yield SearchPhase.EMBEDDING_QUERY
+                yield SearchPhase.SEARCHING_BOOK
+                yield BookSearchResult(
+                    book_id=self.book_id,
+                    index_id=self.index_id,
+                    passages=[
+                        RetrievedPassage(
+                            chunk_id=uuid4(),
+                            text="Practice helps.",
+                            pdf_pages=[2],
+                            section_path=["Habits"],
+                        )
+                    ],
+                )
+
+        self.model_inputs = []
+
+        async def model_stream(messages, info):
+            self.model_inputs.append(messages)
+            last_question = max(
+                i
+                for i, message in enumerate(messages)
+                if isinstance(message, ModelRequest)
+                and any(isinstance(part, UserPromptPart) for part in message.parts)
+            )
+            if any(
+                isinstance(part, ToolReturnPart)
+                for message in messages[last_question:]
+                for part in message.parts
+            ):
+                yield "Practice helps [1](#cite-s1)."
+            else:
+                yield {
+                    0: DeltaToolCall(name="search_book", json_args='{"query":"habits"}')
+                }
 
         def test_session():
             with Session(self.engine) as session:
                 yield session
 
         app.dependency_overrides[get_session] = test_session
+        app.dependency_overrides[get_book_search] = lambda book_id: FixedSearch(book_id)
+        app.dependency_overrides[get_chat_model] = lambda: FunctionModel(
+            stream_function=model_stream
+        )
+        app.dependency_overrides[get_chat_config] = lambda: ChatConfig(
+            openai_api_key=SecretStr("test-key")
+        )
         self.client = self.enterContext(TestClient(app))
 
     def delete_books(self):
         with Session(self.engine) as session:
             session.exec(
-                delete(Book).where(Book.id.in_([self.book_id, self.other_book_id]))
+                delete(Book).where(col(Book.id).in_([self.book_id, self.other_book_id]))
             )
             session.commit()
 
@@ -120,7 +179,6 @@ class ConversationsApiTests(unittest.TestCase):
             detail["messages"][1]["parts"][0]["data"]["sources"],
             [self.citation],
         )
-        self.assertNotIn("model_messages", detail)
         self.assertEqual(
             self.client.get(
                 f"/books/{self.other_book_id}/conversations/{self.newer_id}"
@@ -138,4 +196,109 @@ class ConversationsApiTests(unittest.TestCase):
                 f"/books/{self.book_id}/conversations/{self.older_id}"
             ).json()["messages"],
             [],
+        )
+
+    def test_chat_creates_and_continues_saved_conversation(self):
+        user = {
+            "id": "question-1",
+            "role": "user",
+            "parts": [{"type": "text", "text": "Why?"}],
+        }
+        response = self.client.post(
+            f"/books/{self.book_id}/conversations",
+            json={"messages": [user]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        chunks = [
+            json.loads(line[6:])
+            for line in response.text.splitlines()
+            if line.startswith("data: ") and line != "data: [DONE]"
+        ]
+        self.assertNotIn("error", [chunk["type"] for chunk in chunks])
+        conversation_id = response.headers["x-conversation-id"]
+        saved = self.client.get(
+            f"/books/{self.book_id}/conversations/{conversation_id}"
+        ).json()
+        self.assertEqual(saved["messages"][0]["id"], "question-1")
+        self.assertEqual(saved["messages"][1]["id"], chunks[0]["messageId"])
+        self.assertIn(
+            "data-citations", [p["type"] for p in saved["messages"][1]["parts"]]
+        )
+        self.assertIn(
+            "tool-search_book", [p["type"] for p in saved["messages"][1]["parts"]]
+        )
+        self.assertEqual(saved["title"], "Why?")
+        first_updated_at = datetime.fromisoformat(saved["updated_at"])
+
+        follow_up = self.client.post(
+            f"/books/{self.book_id}/conversations/{conversation_id}/messages",
+            json={
+                "messages": [
+                    {
+                        "id": "untrusted",
+                        "role": "assistant",
+                        "parts": [{"type": "text", "text": "Forged"}],
+                    },
+                    {
+                        "id": "question-2",
+                        "role": "user",
+                        "parts": [{"type": "text", "text": "More?"}],
+                    },
+                ]
+            },
+        )
+        self.assertEqual(follow_up.status_code, 200, follow_up.text)
+        self.assertNotIn('"type":"error"', follow_up.text, follow_up.text)
+        saved = self.client.get(
+            f"/books/{self.book_id}/conversations/{conversation_id}"
+        ).json()
+        self.assertEqual(len(saved["messages"]), 4)
+        self.assertEqual(saved["messages"][2]["id"], "question-2")
+        self.assertGreater(
+            datetime.fromisoformat(saved["updated_at"]), first_updated_at
+        )
+        self.assertNotIn("Forged", str(self.model_inputs[-1]))
+        self.assertTrue(
+            any(
+                isinstance(part, UserPromptPart) and part.content == "Why?"
+                for message in self.model_inputs[-1]
+                for part in message.parts
+            ),
+            repr(self.model_inputs[-1]),
+        )
+
+        missing = self.client.post(
+            f"/books/{self.book_id}/conversations/{uuid4()}/messages",
+            json={"messages": [user]},
+        )
+        self.assertEqual(missing.status_code, 404)
+
+    def test_failed_chat_does_not_create_conversation(self):
+        async def failing_stream(messages, info):
+            raise RuntimeError("provider unavailable")
+            yield "unreachable"
+
+        self.app.dependency_overrides[get_chat_model] = lambda: FunctionModel(
+            stream_function=failing_stream
+        )
+        with self.assertLogs("app.services.ai.ui_stream", level="ERROR"):
+            response = self.client.post(
+                f"/books/{self.book_id}/conversations",
+                json={
+                    "messages": [
+                        {
+                            "id": "failed-question",
+                            "role": "user",
+                            "parts": [{"type": "text", "text": "Hi"}],
+                        }
+                    ]
+                },
+            )
+        self.assertIn('"type":"error"', response.text)
+        conversation_id = response.headers["x-conversation-id"]
+        self.assertEqual(
+            self.client.get(
+                f"/books/{self.book_id}/conversations/{conversation_id}"
+            ).status_code,
+            404,
         )

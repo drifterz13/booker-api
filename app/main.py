@@ -95,6 +95,7 @@ def create_app(
         allow_credentials=False,
         allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Content-Type"],
+        expose_headers=["x-conversation-id"],
     )
     app.include_router(books_router)
     app.include_router(chat_router)

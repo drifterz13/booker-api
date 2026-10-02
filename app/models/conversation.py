@@ -34,12 +34,7 @@ class ConversationRole(StrEnum):
 
 
 class ConversationMessage(SQLModel, table=True):
-    """One visible message, with optional Pydantic AI messages for replay.
-
-    UI data is stored separately because adapter conversion drops emitted
-    data-citations parts. An assistant row can hold the agent messages from
-    its completed run, including the user prompt and tool calls.
-    """
+    """One visible message, including citations and tool parts."""
 
     __table_args__ = (
         UniqueConstraint(
@@ -53,7 +48,6 @@ class ConversationMessage(SQLModel, table=True):
     position: int = Field(ge=0)
     role: ConversationRole
     ui_message: dict[str, Any] = Field(sa_type=JSONB)
-    model_messages: list[dict[str, Any]] | None = Field(default=None, sa_type=JSONB)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), sa_type=DateTime(timezone=True)
     )

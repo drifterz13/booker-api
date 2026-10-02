@@ -1,9 +1,7 @@
 import unittest
 from uuid import uuid4
 
-from pydantic_ai import ModelMessagesTypeAdapter
-from pydantic_ai.ui.vercel_ai import VercelAIAdapter
-from pydantic_ai.ui.vercel_ai.request_types import UIMessage
+from pydantic_ai.ui.vercel_ai.request_types import DataUIPart, UIMessage
 from sqlalchemy import delete
 from sqlmodel import Session, select
 
@@ -47,10 +45,6 @@ class ConversationIntegrationTests(unittest.TestCase):
             position=1,
             role=ConversationRole.ASSISTANT,
             ui_message=ui_message,
-            model_messages=ModelMessagesTypeAdapter.dump_python(
-                VercelAIAdapter.load_messages([UIMessage.model_validate(ui_message)]),
-                mode="json",
-            ),
         )
         with Session(self.engine) as session:
             session.add_all([book, conversation, message])
@@ -64,12 +58,11 @@ class ConversationIntegrationTests(unittest.TestCase):
                 )
             ).one()
             restored = UIMessage.model_validate(saved.ui_message)
-            restored_history = ModelMessagesTypeAdapter.validate_python(
-                saved.model_messages
-            )
-            self.assertEqual(len(restored_history), 1)
             self.assertEqual(saved.role, ConversationRole.ASSISTANT)
-            self.assertEqual(restored.parts[0].data["sources"], [citation])
+            citation_part = next(
+                part for part in restored.parts if isinstance(part, DataUIPart)
+            )
+            self.assertEqual(citation_part.data["sources"], [citation])
 
     def delete_book(self, book_id):
         with Session(self.engine) as session:

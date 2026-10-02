@@ -1,4 +1,4 @@
-from typing import Self
+from typing import Any, Self
 from uuid import uuid4
 
 from pydantic import Field, model_validator
@@ -62,9 +62,22 @@ class ChatRequest(SubmitMessage, extra="ignore"):
         message = self.messages[-1]
         if message.role != "user":
             raise ValueError("The last message must be a user message")
-        text = "".join(part.text for part in message.parts)
+        text = "".join(
+            part.text for part in message.parts if isinstance(part, TextUIPart)
+        )
         if not text.strip() or len(text) > 20_000:
             raise ValueError("The user message requires 1 to 20000 characters")
         if len(self.model_dump_json()) > 200_000:
             raise ValueError("Chat history exceeds 200000 characters")
         return self
+
+
+class ConversationChatRequest(ChatRequest):
+    """Accept useChat's full list but validate only its newest user message."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def latest_message_only(cls, data: Any) -> Any:
+        if isinstance(data, dict) and isinstance(data.get("messages"), list):
+            return {**data, "messages": data["messages"][-1:]}
+        return data

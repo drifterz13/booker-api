@@ -1,10 +1,13 @@
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import aclosing
 
 from opentelemetry.trace import StatusCode
+from pydantic_ai import AgentRunResult
+from pydantic_ai.messages import ModelMessage
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
+from pydantic_ai.ui.vercel_ai.request_types import DataUIPart, UIMessage
 from pydantic_ai.ui.vercel_ai.response_types import (
     DataChunk,
     DoneChunk,
@@ -28,6 +31,37 @@ def status_chunk(phase: str) -> DataChunk:
     )
 
 
+def assistant_ui_message(
+    result: AgentRunResult[str], citations: list[DataChunk], message_id: str
+) -> UIMessage:
+    """Build the assistant message to restore in the chat UI."""
+    assistant_messages = [
+        message
+        for message in VercelAIAdapter.dump_messages(result.new_messages())
+        if message.role == "assistant"
+    ]
+    citation_parts = (
+        [
+            DataUIPart(
+                type=citations[-1].type,
+                id=citations[-1].id,
+                data=citations[-1].data,
+            )
+        ]
+        if citations
+        else []
+    )
+    return assistant_messages[-1].model_copy(
+        update={
+            "id": message_id,
+            "parts": [
+                *citation_parts,
+                *(part for message in assistant_messages for part in message.parts),
+            ],
+        }
+    )
+
+
 async def stream_chat(
     adapter: VercelAIAdapter[BookChatDeps, str],
     searcher: BookSearch,
@@ -35,9 +69,18 @@ async def stream_chat(
     timeout_seconds: float,
     observability: Observability = NO_OBSERVABILITY,
     session_id: str = "",
+    message_history: list[ModelMessage] | None = None,
+    on_complete: Callable[[AgentRunResult[str], list[DataChunk]], Awaitable[None]]
+    | None = None,
 ) -> AsyncIterator[str]:
     event_stream = adapter.build_event_stream()
     deps = BookChatDeps(searcher=searcher)
+    citation_chunks: list[DataChunk] = []
+
+    async def completed(result: AgentRunResult[str]) -> None:
+        if on_complete is not None:
+            await on_complete(result, citation_chunks)
+
     with observability.chat(
         session_id=session_id,
         book_id=str(searcher.book_id),
@@ -46,8 +89,18 @@ async def stream_chat(
         try:
             async with (
                 asyncio.timeout(timeout_seconds),
-                aclosing(adapter.run_stream_native(deps=deps)) as native,
-                aclosing(event_stream.transform_stream(native)) as chunks,
+                aclosing(
+                    adapter.run_stream_native(
+                        deps=deps,
+                        message_history=message_history,
+                        conversation_id=session_id or None,
+                    )
+                ) as native,
+                aclosing(
+                    event_stream.transform_stream(
+                        native, on_complete=completed if on_complete else None
+                    )
+                ) as chunks,
             ):
                 async for chunk in chunks:
                     if isinstance(chunk, ErrorChunk):
@@ -57,6 +110,10 @@ async def stream_chat(
                         chunk = ErrorChunk(error_text="Could not generate an answer.")
                     elif isinstance(chunk, DataChunk) and chunk.type == "data-status":
                         chunk = chunk.model_copy(update={"transient": True})
+                    elif (
+                        isinstance(chunk, DataChunk) and chunk.type == "data-citations"
+                    ):
+                        citation_chunks.append(chunk)
                     elif (
                         isinstance(chunk, FinishChunk)
                         and chunk.finish_reason != "error"

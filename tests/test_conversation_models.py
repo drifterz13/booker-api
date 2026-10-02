@@ -2,16 +2,15 @@ import json
 import unittest
 from uuid import uuid4
 
-from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
-from pydantic_ai.ui.vercel_ai.request_types import UIMessage
+from pydantic_ai.ui.vercel_ai.request_types import DataUIPart, UIMessage
 
 from app.models.conversation import ConversationMessage, ConversationRole
 from app.schemas.citation import CitationData
 
 
 class ConversationMessageTests(unittest.TestCase):
-    def test_citations_survive_ui_storage_separately_from_agent_history(self):
+    def test_citations_survive_ui_storage_and_adapter_can_load_context(self):
         book_id, index_id, chunk_id = uuid4(), uuid4(), uuid4()
         user = UIMessage.model_validate(
             {
@@ -60,18 +59,15 @@ class ConversationMessageTests(unittest.TestCase):
             position=1,
             role=ConversationRole.ASSISTANT,
             ui_message=assistant.model_dump(mode="json"),
-            model_messages=ModelMessagesTypeAdapter.dump_python(
-                agent_history, mode="json"
-            ),
         )
         # JSON round-trip mirrors the PostgreSQL JSONB boundary.
         stored_ui = UIMessage.model_validate(json.loads(json.dumps(message.ui_message)))
-        stored_history = ModelMessagesTypeAdapter.validate_python(
-            json.loads(json.dumps(message.model_messages))
-        )
+        stored_history = VercelAIAdapter.load_messages([user, stored_ui])
 
         citation_part = next(
-            part for part in stored_ui.parts if part.type == "data-citations"
+            part
+            for part in stored_ui.parts
+            if isinstance(part, DataUIPart) and part.type == "data-citations"
         )
         source = CitationData.model_validate(citation_part.data).sources[0]
         self.assertEqual(source.book_id, book_id)

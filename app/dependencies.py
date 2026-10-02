@@ -48,8 +48,8 @@ def get_book_service(session: SessionDep, storage: StorageDep) -> BookService:
 BookServiceDep = Annotated[BookService, Depends(get_book_service)]
 
 
-def get_conversation_service(session: SessionDep) -> ConversationService:
-    return ConversationService(session=session)
+def get_conversation_service(request: Request) -> ConversationService:
+    return ConversationService(engine=request.app.state.engine)
 
 
 ConversationServiceDep = Annotated[
