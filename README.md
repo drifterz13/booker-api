@@ -54,3 +54,18 @@ docker compose up -d --wait phoenix
 ```
 
 Open http://localhost:6006 for the Phoenix UI.
+
+## RAG evaluation
+
+The on-demand DeepEval suite uses the six draft cases in
+`eval/rag-evaluation-draft.json`. It runs Booker's real agent and retrieval
+against already indexed books; reference passages are never supplied to the agent.
+
+Copy `eval/books.example.json` to `eval/books.local.json` and replace the
+placeholders with the book UUIDs from `GET /books`. Set `DATABASE_URL` and
+`OPENAI_API_KEY` in `.env` for that database and provider, then run:
+
+```sh
+make eval
+```
+

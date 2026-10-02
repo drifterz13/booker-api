@@ -1,4 +1,4 @@
-.PHONY: dev test format migrate migration db-check
+.PHONY: dev test eval format migrate migration db-check
 
 dev:
 	uv run fastapi dev
@@ -18,3 +18,6 @@ format:
 
 test:
 	uv run python -m unittest discover -s tests -v
+
+eval:
+	DEEPEVAL_TELEMETRY_OPT_OUT=1 uv run --group eval deepeval test run eval/test_rag.py

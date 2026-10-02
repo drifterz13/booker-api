@@ -1,0 +1,155 @@
+[
+  {
+    "input": "Why do the authors of Rework call long-term business plans guesses?",
+    "expected_output": "Because market conditions, competitors, customers, and the economy are outside a business's control, and a plan made before work begins is based on less information than becomes available while doing the work.",
+    "context": [
+      "Planning is guessing\nUnless you're a fortune-teller, long-term business planning is a fantasy. There are\njust too many factors that are out of your hands: market conditions, competitors,\ncustomers, the economy, etc. Writing a plan makes you feel in control of things\nyou can't actually control.\nWhy don't we just call plans what they really are: guesses. Start referring to\nyour business plans as business guesses, your financial plans as financial\nguesses, and your strategic plans as strategic guesses. Now you can stop\nworrying about them as much. They just aren't worth the stress.\nWhen you turn guesses into plans, you enter a danger zone. Plans let the past\ndrive the future. They put blinders on you. \"This is where we're going because,\nwell, that's where we said we were going.\" And that's the problem: Plans are\ninconsistent with improvisation.\nAnd you have to be able to improvise. You have to be able to pick up\nopportunities that come along. Sometimes you need to say, \"We're going in a\nnew direction because that's what makes sense today.\"\nThe timing of long-range plans is screwed up too. You have the most\ninformation when you're doing something, not before you've done it. Yet when\ndo you write a plan? Usually it's before you've even begun. That's the worst time\nto make a big decision.\nNow this isn't to say you shouldn't think about the future or contemplate how\nyou might attack upcoming obstacles. That's a worthwhile exercise. Just don't\nfeel you need to write it down or obsess about it. If you write a big plan, you'll\nmost likely never look at it anyway. Plans more than a few pages long just wind\nup as fossils in your file cabinet.\nGive up on the guesswork. Decide what you're going to do this week, not this\nyear. Figure out the next most important thing and do that. Make decisions right\nbefore you do something, not far in advance.\nIt's OK to wing it. Just get on the plane and go. You can pick up a nicer shirt,\nshaving cream, and a toothbrush once you get there.\nWorking without a plan may seem scary. But blindly following a plan that has\nno relationship with reality is even scarier."
+    ],
+    "additional_metadata": {
+      "case_id": "rag-001",
+      "book_key": "rework",
+      "expected_behavior": "answer",
+      "page_basis": "user_supplied_book_pages",
+      "sources": [
+        {
+          "context_index": 0,
+          "section": "Planning is guessing",
+          "book_pages": [
+            18
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "input": "According to Hyrum's Law, what happens as the number of users of an API grows?",
+    "expected_output": "With enough users, someone will depend on every observable behavior of the API, regardless of what its published contract promises.",
+    "context": [
+      "Hyrum’s Law\nIf you are maintaining a project that is used by other engineers, the most important\nlesson about “it works” versus “it is maintainable” is what we’ve come to call Hyrum’s\nLaw:\nWith a sufficient number of users of an API, it does not matter what you promise in\nthe contract: all observable behaviors of your system will be depended on by\nsomebody.\nIn our experience, this axiom is a dominant factor in any discussion of changing soft‐\nware over time. It is conceptually akin to entropy: discussions of change and mainte‐\nnance over time must be aware of Hyrum’s Law8 just as discussions of efficiency or\nthermodynamics must be mindful of entropy. Just because entropy never decreases\ndoesn’t mean we shouldn’t try to be efficient. Just because Hyrum’s Law will apply\nwhen maintaining software doesn’t mean we can’t plan for it or try to better under‐\nstand it. We can mitigate it, but we know that it can never be eradicated.\nHyrum’s Law represents the practical knowledge that—even with the best of inten‐\ntions, the best engineers, and solid practices for code review—we cannot assume per‐\nfect adherence to published contracts or best practices. As an API owner, you will\ngain some flexibility and freedom by being clear about interface promises, but in\npractice, the complexity and difficulty of a given change also depends on how useful a\nuser finds some observable behavior of your API. If users cannot depend on such\nthings, your API will be easy to change. Given enough time and enough users, even\nthe most innocuous change will break something;9 your analysis of the value of that\nchange must incorporate the difficulty in investigating, identifying, and resolving\nthose breakages."
+    ],
+    "additional_metadata": {
+      "case_id": "rag-002",
+      "book_key": "software-engineering-at-google",
+      "expected_behavior": "answer",
+      "page_basis": "user_supplied_book_pages",
+      "sources": [
+        {
+          "context_index": 0,
+          "section": "Hyrum’s Law",
+          "book_pages": [
+            36
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "input": "Why does Sun Tzu warn against a prolonged campaign in Waging War?",
+    "expected_output": "A prolonged campaign dulls weapons and morale, exhausts strength and state resources, and gives other leaders an opening to exploit the army's weakness.",
+    "context": [
+      "Waging War\n1\\. *Sun Tzu said*: In the operations of war, where there\nare in the field a thousand swift chariots, as many\nheavy chariots, and a hundred thousand mail-clad sol-\ndiers, with provisions enough to carry them a thousand\nli, the expenditure at home and at the front, including\nentertainment of guests, small items such as glue and\npaint, and sums spent on chariots and armor, will reach\nthe total of a thousand ounces of silver per day. Such\nis the cost of raising an army of 100,000 men.\n2\\. When you engage in actual fighting, if victory is\nlong in coming, then men’s weapons will grow dull and\ntheir ardor will be damped. If you lay siege to a town,\nyou will exhaust your strength.\n3\\. Again, if the campaign is protracted, the resources of\nthe State will not be equal to the strain.\n4\\. Now, when your weapons are dulled, your ardor\ndamped, your strength exhausted and your treasure\nspent, other chieftains will spring up to take advantage\nof your extremity. Then no man, however wise, will be\nable to avert the consequences that must ensue.\n5\\. Thus, though we have heard of stupid haste in war,\ncleverness has never been seen associated with long\ndelays.\n6\\. There is no instance of a country having benefited\nfrom prolonged warfare.\n7\\. It is only one who is thoroughly acquainted with the\nevils of war that can thoroughly understand the prof-\nitable way of carrying it on.\n8\\. The skillful soldier does not raise a second levy, nei-\nther are his supply-wagons loaded more than twice.\n9\\. Bring war material with you from home, but forage\non the enemy. Thus the army will have food enough for\nits needs.\n10\\. Poverty of the State exchequer causes an army to be\nmaintained by contributions from a distance.\nContributing to maintain an army at a distance causes\nthe people to be impoverished.\n11\\. On the other hand, the proximity of an army caus-\nes prices to go up; and high prices cause the people’s\nsubstance to be drained away.\n12\\. When their substance is drained away, the peas-\nantry will be afflicted by heavy exactions.\n13,14. With this loss of substance and exhaustion of\nstrength, the homes of the people will be stripped bare,\nand three-tenths of their income will be dissipated;\nwhile government expenses for broken chariots, worn-\nout horses, breast-plates and helmets, bows and arrows,\nspears and shields, protective mantles, draught-oxen\nand heavy wagons, will amount to four-tenths of its\ntotal revenue.\n15\\. Hence a wise general makes a point of foraging on\nthe enemy. One cartload of the enemy’s provisions is\nequivalent to twenty of one’s own, and likewise a sin-\ngle picul of his provender is equivalent to twenty from\none’s own store.\n16\\. Now in order to kill the enemy, our men must be\nroused to anger; that there may be advantage from\ndefeating the enemy, they must have their rewards.\n17\\. Therefore in chariot fighting, when ten or more\nchariots have been taken, those should be rewarded\nwho took the first. Our own flags should be substituted\nfor those of the enemy, and the chariots mingled and\nused in conjunction with ours. The captured soldiers\nshould be kindly treated and kept.\n18\\. This is called, using the conquered foe to augment\none’s own strength.\n19\\. In war, then, let your great object be victory, not\nlengthy campaigns.\n20\\. Thus it may be known that the leader of armies is\nthe arbiter of the people’s fate, the man on whom it\ndepends whether the nation shall be in peace or in peril."
+    ],
+    "additional_metadata": {
+      "case_id": "rag-003",
+      "book_key": "the-art-of-war",
+      "expected_behavior": "answer",
+      "page_basis": "user_supplied_book_pages",
+      "sources": [
+        {
+          "context_index": 0,
+          "section": "Waging War",
+          "book_pages": [
+            8,
+            9,
+            10,
+            11
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "input": "How do the authors recommend using limited resources when deciding what to build?",
+    "expected_output": "Treat constraints as a prompt for creativity and simplicity, then cut merely good ideas so the team can build a smaller product well instead of trying to do everything at once.",
+    "context": [
+      "Embrace constraints\n\"I don't have enough time/money/people/experience.\" Stop whining. Less is a\ngood thing. Constraints are advantages in disguise. Limited resources force you\nto make do with what you've got. There's no room for waste. And that forces you\nto be creative.\nEver seen the weapons prisoners make out of soap or a spoon? They make do\nwith what they've got. Now we're not saying you should go out and shank\nsomebody--but get creative and you'll be amazed at what you can make with just\na little.\nWriters use constraints to force creativity all the time. Shakespeare reveled in\nthe limitations of sonnets (fourteen-line lyric poems in iambic pentameter with a\nspecific rhyme scheme). Haiku and limericks also have strict rules that lead to\ncreative results. Writers like Ernest Hemingway and Raymond Carver found that\nforcing themselves to use simple, clear language helped them deliver maximum\nimpact.\nThe Price Is Right, the longest-running game show in history, is also a great\nexample of creativity born from embracing constraints. The show has more than\na hundred games, and each one is based on the question \"How much does this\nitem cost?\" That simple formula has attracted fans for more than thirty years.\nSouthwest--unlike most other airlines, which fly multiple aircraft models--\nflies only Boeing 737s. As a result, every Southwest pilot, flight attendant, and\nground-crew member can work any flight. Plus, all of Southwest's parts fit all of\nits planes. All that means lower costs and a business that's easier to run. They\nmade it easy on themselves.\nWhen we were building Basecamp, we had plenty of limitations. We had a\ndesign firm to run with existing client work, a seven-hour time difference\nbetween principals (David was doing the programming in Denmark, the rest of\nus were in the States), a small team, and no outside funding. These constraints\nforced us to keep the product simple.\nThese days, we have more resources and people, but we still force constraints.\nWe make sure to have only one or two people working on a product at a time.\nAnd we always keep features to a minimum. Boxing ourselves in this way\nprevents us from creating bloated products.\nSo before you sing the \"not enough\" blues, see how far you can get with what\nyou have.",
+      "Build half a product, not a half-assed product\nYou can turn a bunch of great ideas into a crappy product real fast by trying to\ndo them all at once. You just can't do everything you want to do and do it well.\nYou have limited time, resources, ability, and focus. It's hard enough to do one\nthing right. Trying to do ten things well at the same time? Forget about it.\nSo sacrifice some of your darlings for the greater good. Cut your ambition in\nhalf. You're better off with a kick-ass half than a half-assed whole.\nMost of your great ideas won't seem all that great once you get some\nperspective, anyway. And if they truly are that fantastic, you can always do them\nlater.\nLots of things get better as they get shorter. Directors cut good scenes to make\na great movie. Musicians drop good tracks to make a great album. Writers\neliminate good pages to make a great book. We cut this book in half between the\nnext-to-last and final drafts. From 57,000 words to about 27,000 words. Trust us,\nit's better for it.\nSo start chopping. Getting to great starts by cutting out stuff that's merely\ngood."
+    ],
+    "additional_metadata": {
+      "case_id": "rag-004",
+      "book_key": "rework",
+      "expected_behavior": "answer",
+      "page_basis": "user_supplied_book_pages",
+      "sources": [
+        {
+          "context_index": 0,
+          "section": "Embrace constraints",
+          "book_pages": [
+            51
+          ]
+        },
+        {
+          "context_index": 1,
+          "section": "Build half a product, not a half-assed product",
+          "book_pages": [
+            53
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "input": "How does a longer expected life span change the work needed to keep software sustainable?",
+    "expected_output": "Longer-lived software is more likely to face changes in dependencies, technology, and requirements. Keeping it sustainable therefore means being able to adapt and maintain it over time, unlike short-lived code that may never need such changes.",
+    "context": [
+      "Within Google, we sometimes say, “Software engineering is programming integrated\nover time.” Programming is certainly a significant part of software engineering: after\nall, programming is how you generate new software in the first place. If you accept\nthis distinction, it also becomes clear that we might need to delineate between pro‐\ngramming tasks (development) and software engineering tasks (development, modi‐\nfication, maintenance). The addition of time adds an important new dimension to\nprogramming. Cubes aren’t squares, distance isn’t velocity. Software engineering isn’t\nprogramming.\nOne way to see the impact of time on a program is to think about the question,\n“What is the expected life span1 of your code?” Reasonable answers to this question\nvary by roughly a factor of 100,000. It is just as reasonable to think of code that needs\nto last for a few minutes as it is to imagine code that will live for decades. Generally,\ncode on the short end of that spectrum is unaffected by time. It is unlikely that you\nneed to adapt to a new version of your underlying libraries, operating system (OS),\nhardware, or language version for a program whose utility spans only an hour. These\nshort-lived systems are effectively “just” a programming problem, in the same way\nthat a cube compressed far enough in one dimension is a square. As we expand that\ntime to allow for longer life spans, change becomes more important. Over a span of a\ndecade or more, most program dependencies, whether implicit or explicit, will likely\nchange. This recognition is at the root of our distinction between software engineer‐\ning and programming.\nThis distinction is at the core of what we call sustainability for software. Your project\nis sustainable if, for the expected life span of your software, you are capable of react‐\ning to whatever valuable change comes along, for either technical or business reasons.\nImportantly, we are looking only for capability—you might choose not to perform a\ngiven upgrade, either for lack of value or other priorities.2 When you are fundamen‐\ntally incapable of reacting to a change in underlying technology or product direction,\nyou’re placing a high-risk bet on the hope that such a change never becomes critical.\nFor short-term projects, that might be a safe bet. Over multiple decades, it probably\nisn’t.",
+      "Time and Change\nWhen a novice is learning to program, the life span of the resulting code is usually\nmeasured in hours or days. Programming assignments and exercises tend to be write-\nonce, with little to no refactoring and certainly no long-term maintenance. These\nprograms are often not rebuilt or executed ever again after their initial production.\nThis isn’t surprising in a pedagogical setting. Perhaps in secondary or post-secondary\neducation, we may find a team project course or hands-on thesis. If so, such projects\nare likely the only time student code will live longer than a month or so. Those devel‐\nopers might need to refactor some code, perhaps as a response to changing require‐\nments, but it is unlikely they are being asked to deal with broader changes to their\nenvironment.\nWe also find developers of short-lived code in common industry settings. Mobile\napps often have a fairly short life span,6 and for better or worse, full rewrites are rela‐\ntively common. Engineers at an early-stage startup might rightly choose to focus on\nimmediate goals over long-term investments: the company might not live long\nenough to reap the benefits of an infrastructure investment that pays off slowly. A\nserial startup developer could very reasonably have 10 years of development experi‐\nence and little or no experience maintaining any piece of software expected to exist\nfor longer than a year or two.\nOn the other end of the spectrum, some successful projects have an effectively\nunbounded life span: we can’t reasonably predict an endpoint for Google Search, the\nLinux kernel, or the Apache HTTP Server project. For most Google projects, we must\nassume that they will live indefinitely—we cannot predict when we won’t need to\nupgrade our dependencies, language versions, and so on. As their lifetimes grow,\nthese long-lived projects eventually have a different feel to them than programming\nassignments or startup development."
+    ],
+    "additional_metadata": {
+      "case_id": "rag-005",
+      "book_key": "software-engineering-at-google",
+      "expected_behavior": "answer",
+      "page_basis": "user_supplied_book_pages",
+      "sources": [
+        {
+          "context_index": 0,
+          "section": "What Is Software Engineering? (opening passage)",
+          "book_pages": [
+            31,
+            32
+          ]
+        },
+        {
+          "context_index": 1,
+          "section": "Time and Change (opening passage)",
+          "book_pages": [
+            34
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "input": "By what percentage do meetings reduce employee productivity, according to Rework?",
+    "expected_output": "The supplied passage does not give a percentage reduction in employee productivity.",
+    "context": [
+      "Meetings are toxic\nThe worst interruptions of all are meetings. Here's why:\nThey're usually about words and abstract concepts, not real things.\nThey usually convey an abysmally small amount of information per minute.\nThey drift off-subject easier than a Chicago cab in a snowstorm.\nThey require thorough preparation that most people don't have time for.\nThey frequently have agendas so vague that nobody is really sure of the\ngoal.\nThey often include at least one moron who inevitably gets his turn to waste\neveryone's time with nonsense.\nMeetings procreate. One meeting leads to another meeting leads to another\n...\nIt's also unfortunate that meetings are typically scheduled like TV shows. You\nset aside thirty minutes or an hour because that's how scheduling software works\n(you'll never see anyone schedule a seven-minute meeting with Outlook). Too\nbad. If it only takes seven minutes to accomplish a meeting's goal, then that's all\nthe time you should spend. Don't stretch seven into thirty.\nWhen you think about it, the true cost of meetings is staggering. Let's say\nyou're going to schedule a meeting that lasts one hour, and you invite ten people\nto attend. That's actually a ten-hour meeting, not a one-hour meeting. You're\ntrading ten hours of productivity for one hour of meeting time. And it's probably\nmore like fifteen hours, because there are mental switching costs that come with\nstopping what you're doing, going somewhere else to meet, and then resuming\nwhat you were doing beforehand.\nIs it ever OK to trade ten or fifteen hours of productivity for one hour of\nmeeting? Sometimes, maybe. But that's a pretty hefty price to pay. Judged on a\npure cost basis, meetings of this size quickly become liabilities, not assets. Think\nabout the time you're actually losing and ask yourself if it's really worth it.\nIf you decide you absolutely must get together, try to make your meeting a\nproductive one by sticking to these simple rules:\nSet a timer. When it rings, meeting's over. Period.\nInvite as few people as possible.\nAlways have a clear agenda.\nBegin with a specific problem.\nMeet at the site of the problem instead of a conference room. Point to real\nthings and suggest real changes.\nEnd with a solution and make someone responsible for implementing it."
+    ],
+    "additional_metadata": {
+      "case_id": "rag-006",
+      "book_key": "rework",
+      "expected_behavior": "abstain",
+      "page_basis": "user_supplied_book_pages",
+      "sources": [
+        {
+          "context_index": 0,
+          "section": "Meetings are toxic",
+          "book_pages": [
+            82,
+            83
+          ]
+        }
+      ]
+    }
+  }
+]

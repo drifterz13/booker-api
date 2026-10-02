@@ -25,6 +25,10 @@ dependencies = [
 dev = [
     "ruff>=0.16.9",
 ]
+eval = [
+    "deepeval>=4.2.7,<5",
+    "pytest>=9,<10",
+]
 
 [build-system]
 requires = ["uv_build>=0.11.7,<0.12"]
