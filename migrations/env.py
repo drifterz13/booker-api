@@ -9,6 +9,10 @@ from app.db.database import create_db_engine
 from app.models.book import Book  # noqa: F401 - register table metadata
 from app.models.book_chunk import BookChunk  # noqa: F401 - register table metadata
 from app.models.book_index import BookIndex  # noqa: F401 - register table metadata
+from app.models.conversation import (  # noqa: F401 - register table metadata
+    Conversation,
+    ConversationMessage,
+)
 
 config = context.config
 target_metadata = SQLModel.metadata
