@@ -19,6 +19,7 @@ from .services.ai.tools.book_search import (
 )
 from .services.books import BookService
 from .services.chunker import ChunkEmbedder
+from .services.conversations import ConversationService
 from .services.ingest.books import BookIngestionService
 from .services.observability import NO_OBSERVABILITY, Observability
 from .services.storage.storage import ObjectStorage
@@ -45,6 +46,15 @@ def get_book_service(session: SessionDep, storage: StorageDep) -> BookService:
 
 
 BookServiceDep = Annotated[BookService, Depends(get_book_service)]
+
+
+def get_conversation_service(session: SessionDep) -> ConversationService:
+    return ConversationService(session=session)
+
+
+ConversationServiceDep = Annotated[
+    ConversationService, Depends(get_conversation_service)
+]
 
 
 def get_book_ingestion_service(

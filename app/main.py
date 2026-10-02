@@ -22,6 +22,7 @@ from .db.database import create_db_engine
 from .models.book_index import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL
 from .routers.books import router as books_router
 from .routers.chat import router as chat_router
+from .routers.conversations import router as conversations_router
 from .routers.uploads import router as uploads_router
 from .services.observability import create_observability
 from .services.storage.storage import ObjectStorage
@@ -97,6 +98,7 @@ def create_app(
     )
     app.include_router(books_router)
     app.include_router(chat_router)
+    app.include_router(conversations_router)
     app.include_router(uploads_router)
 
     @app.get("/health")
