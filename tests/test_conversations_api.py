@@ -17,7 +17,7 @@ from app.dependencies import get_book_search, get_chat_config, get_chat_model
 from app.models.book import Book
 from app.models.conversation import Conversation, ConversationMessage, ConversationRole
 from app.models.search import BookSearchResult, RetrievedPassage
-from app.routers.conversations import router
+from app.routers.conversations import global_router, router
 from app.services.ai.tools.book_search import SearchPhase
 from tests.support import database_resources
 
@@ -35,7 +35,11 @@ class ConversationsApiTests(unittest.TestCase):
         newer = Conversation(
             book_id=book.id, title="Newer", updated_at=now + timedelta(minutes=1)
         )
-        another_book = Conversation(book_id=other_book.id, title="Other book")
+        another_book = Conversation(
+            book_id=other_book.id,
+            title="Other book",
+            updated_at=now + timedelta(minutes=2),
+        )
         self.book_id = book.id
         self.other_book_id = other_book.id
         self.older_id = older.id
@@ -88,6 +92,7 @@ class ConversationsApiTests(unittest.TestCase):
         app = FastAPI()
         self.app = app
         app.include_router(router)
+        app.include_router(global_router)
         app.state.engine = self.engine
 
         class FixedSearch:
@@ -164,6 +169,26 @@ class ConversationsApiTests(unittest.TestCase):
         self.assertEqual(self.client.get(url, params={"limit": 0}).status_code, 422)
         self.assertEqual(
             self.client.get(f"/books/{uuid4()}/conversations").status_code, 404
+        )
+
+    def test_global_list_includes_all_books_newest_first_and_paginated(self):
+        response = self.client.get("/conversations", params={"limit": 100})
+        self.assertEqual(response.status_code, 200, response.text)
+        conversations = response.json()
+        ids = [item["id"] for item in conversations]
+        expected = [self.another_book_id, self.newer_id, self.older_id]
+        positions = [ids.index(str(conversation_id)) for conversation_id in expected]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(
+            conversations[positions[0]]["book_id"], str(self.other_book_id)
+        )
+        page = self.client.get(
+            "/conversations", params={"offset": positions[0], "limit": 1}
+        ).json()
+        self.assertEqual(page[0]["id"], str(self.another_book_id))
+        self.assertEqual(
+            self.client.get("/conversations", params={"limit": 101}).status_code,
+            422,
         )
 
     def test_detail_returns_ordered_ui_messages_and_citations(self):

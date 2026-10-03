@@ -15,9 +15,9 @@ class Settings(BaseSettings):
 class StorageConfig(Settings):
     aws_access_key_id: str = Field(validation_alias="S3_ACCESS_KEY", default="rustfs")
     aws_secret_key: str = Field(validation_alias="S3_SECRET_KEY", default="secret")
-    s3_endpoint_url: str = "http://localhost:9000"
-    s3_region_name: str = "eu-central-1"
-    s3_bucket_name: str = "booker-prod"
+    s3_endpoint_url: str = Field(default="http://localhost:9000")
+    s3_region_name: str = Field(default="eu-central-1")
+    s3_bucket_name: str = Field(default="booker")
 
 
 class DatabaseConfig(Settings):

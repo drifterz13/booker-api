@@ -28,6 +28,7 @@ from ..services.ai.ui_stream import assistant_ui_message, stream_chat
 from ..services.conversations import ConversationService
 
 router = APIRouter(prefix="/books/{book_id}/conversations", tags=["conversations"])
+global_router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
 def conversation_chat_response(
@@ -151,8 +152,22 @@ def list_conversations(
     try:
         if not service.book_exists(book_id):
             raise HTTPException(404, "Book does not exist")
-        conversations = service.list_for_book(
-            book_id, offset=params.offset, limit=params.limit
+        conversations = service.list_conversations(
+            book_id=book_id, offset=params.offset, limit=params.limit
+        )
+    except SQLAlchemyError as error:
+        raise HTTPException(503, "Could not list conversations") from error
+    return [ConversationPublic.model_validate(item) for item in conversations]
+
+
+@global_router.get("")
+def list_all_conversations(
+    params: Annotated[ConversationListParams, Query()],
+    service: ConversationServiceDep,
+) -> list[ConversationPublic]:
+    try:
+        conversations = service.list_conversations(
+            offset=params.offset, limit=params.limit
         )
     except SQLAlchemyError as error:
         raise HTTPException(503, "Could not list conversations") from error

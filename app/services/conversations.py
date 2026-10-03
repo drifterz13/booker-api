@@ -35,15 +35,16 @@ class ConversationService:
         with Session(self._engine) as session:
             return session.get(Book, book_id) is not None
 
-    def list_for_book(
-        self, book_id: UUID, *, offset: int, limit: int
+    def list_conversations(
+        self, *, offset: int, limit: int, book_id: UUID | None = None
     ) -> list[Conversation]:
         with Session(self._engine) as session:
+            query = select(Conversation)
+            if book_id is not None:
+                query = query.where(Conversation.book_id == book_id)
             return list(
                 session.exec(
-                    select(Conversation)
-                    .where(Conversation.book_id == book_id)
-                    .order_by(
+                    query.order_by(
                         col(Conversation.updated_at).desc(), col(Conversation.id).desc()
                     )
                     .offset(offset)
