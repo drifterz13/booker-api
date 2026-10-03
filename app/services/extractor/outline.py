@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 from pathlib import Path
 from typing import Any
@@ -7,6 +8,8 @@ from typing import Any
 import pymupdf
 
 from app.models import PdfDocument, PdfPosition, PdfSection
+
+logger = logging.getLogger(__name__)
 
 
 class PdfExtractionError(ValueError):
@@ -47,6 +50,16 @@ class OutlineExtractor:
                 page_number=page_number,
                 destination=destination,
             )
+            if open_sections and start < open_sections[-1].start:
+                previous = open_sections[-1].start
+                logger.warning(
+                    "Outline entry %r at %r precedes the previous entry at %r; "
+                    "using the previous position",
+                    title,
+                    start,
+                    previous,
+                )
+                start = previous
 
             # A section ends at the next entry on the same or a shallower level.
             while open_sections and open_sections[-1].level >= level:
